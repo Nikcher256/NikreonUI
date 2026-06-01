@@ -7,11 +7,25 @@
 #include <fstream>
 #include <stdexcept>
 
+#include <glm/common.hpp>
+
 namespace Engine {
 
 namespace {
 
 constexpr std::size_t VerticesPerQuad = 6;
+
+bool sameClipRect(const UIClipRect& left, const UIClipRect& right)
+{
+    return left.position == right.position && left.size == right.size;
+}
+
+UIClipRect intersectClipRects(const UIClipRect& left, const UIClipRect& right)
+{
+    const glm::vec2 minimum = glm::max(left.position, right.position);
+    const glm::vec2 maximum = glm::min(left.position + left.size, right.position + right.size);
+    return {minimum, glm::max(maximum - minimum, glm::vec2{0.0f, 0.0f})};
+}
 
 #ifndef NIKREON_SHADER_DIR
 #define NIKREON_SHADER_DIR "shaders"
@@ -53,6 +67,9 @@ void VulkanRenderer2D::begin(const glm::uvec2& viewportSize)
     m_viewportSize = viewportSize;
     m_vertices.clear();
     m_sdfInstances.clear();
+    m_quadBatches.clear();
+    m_sdfBatches.clear();
+    m_clipStack.clear();
 }
 
 void VulkanRenderer2D::drawQuad(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color)
@@ -71,11 +88,16 @@ void VulkanRenderer2D::drawQuad(const glm::vec2& position, const glm::vec2& size
     const glm::vec2 p3 = toNdc({position.x, position.y + size.y});
 
     m_vertices.push_back({p0, color});
+    const UIClipRect clipRect = currentClipRect();
+    if (m_quadBatches.empty() || !sameClipRect(m_quadBatches.back().clipRect, clipRect)) {
+        m_quadBatches.push_back({clipRect, static_cast<std::uint32_t>(m_vertices.size() - 1), 0});
+    }
     m_vertices.push_back({p1, color});
     m_vertices.push_back({p2, color});
     m_vertices.push_back({p2, color});
     m_vertices.push_back({p3, color});
     m_vertices.push_back({p0, color});
+    m_quadBatches.back().count += static_cast<std::uint32_t>(VerticesPerQuad);
 }
 
 void VulkanRenderer2D::drawRect(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color, const float thickness)
@@ -120,6 +142,23 @@ void VulkanRenderer2D::drawSdfRect(
         radius,
         borderWidth,
     });
+    const UIClipRect clipRect = currentClipRect();
+    if (m_sdfBatches.empty() || !sameClipRect(m_sdfBatches.back().clipRect, clipRect)) {
+        m_sdfBatches.push_back({clipRect, static_cast<std::uint32_t>(m_sdfInstances.size() - 1), 0});
+    }
+    ++m_sdfBatches.back().count;
+}
+
+void VulkanRenderer2D::pushClipRect(const UIClipRect& clipRect)
+{
+    m_clipStack.push_back(m_clipStack.empty() ? clipRect : intersectClipRects(m_clipStack.back(), clipRect));
+}
+
+void VulkanRenderer2D::popClipRect()
+{
+    if (!m_clipStack.empty()) {
+        m_clipStack.pop_back();
+    }
 }
 
 void VulkanRenderer2D::end()
@@ -140,7 +179,10 @@ void VulkanRenderer2D::record(const VkCommandBuffer commandBuffer)
     if (!m_vertices.empty()) {
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, &m_vertexBuffer, offsets);
-        vkCmdDraw(commandBuffer, static_cast<std::uint32_t>(m_vertices.size()), 1, 0, 0);
+        for (const DrawBatch& batch : m_quadBatches) {
+            setScissor(commandBuffer, batch.clipRect);
+            vkCmdDraw(commandBuffer, batch.count, 1, batch.first, 0);
+        }
     }
 
     if (!m_sdfInstances.empty()) {
@@ -148,7 +190,10 @@ void VulkanRenderer2D::record(const VkCommandBuffer commandBuffer)
         const VkDeviceSize sdfOffsets[] = {0, 0};
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_sdfPipeline);
         vkCmdBindVertexBuffers(commandBuffer, 0, 2, sdfBuffers, sdfOffsets);
-        vkCmdDraw(commandBuffer, static_cast<std::uint32_t>(VerticesPerQuad), static_cast<std::uint32_t>(m_sdfInstances.size()), 0, 0);
+        for (const DrawBatch& batch : m_sdfBatches) {
+            setScissor(commandBuffer, batch.clipRect);
+            vkCmdDraw(commandBuffer, static_cast<std::uint32_t>(VerticesPerQuad), batch.count, 0, batch.first);
+        }
     }
 }
 
@@ -565,6 +610,31 @@ void VulkanRenderer2D::setViewportAndScissor(const VkCommandBuffer commandBuffer
 
     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+}
+
+void VulkanRenderer2D::setScissor(const VkCommandBuffer commandBuffer, const UIClipRect& clipRect) const
+{
+    const float maxWidth = static_cast<float>(m_viewportSize.x);
+    const float maxHeight = static_cast<float>(m_viewportSize.y);
+    const float x = std::clamp(clipRect.position.x, 0.0f, maxWidth);
+    const float y = std::clamp(clipRect.position.y, 0.0f, maxHeight);
+    const float right = std::clamp(clipRect.position.x + clipRect.size.x, x, maxWidth);
+    const float bottom = std::clamp(clipRect.position.y + clipRect.size.y, y, maxHeight);
+
+    VkRect2D scissor{};
+    scissor.offset = {static_cast<std::int32_t>(x), static_cast<std::int32_t>(y)};
+    scissor.extent = {
+        static_cast<std::uint32_t>(right - x),
+        static_cast<std::uint32_t>(bottom - y),
+    };
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+}
+
+UIClipRect VulkanRenderer2D::currentClipRect() const
+{
+    return m_clipStack.empty()
+        ? UIClipRect{{0.0f, 0.0f}, {static_cast<float>(m_viewportSize.x), static_cast<float>(m_viewportSize.y)}}
+        : m_clipStack.back();
 }
 
 glm::vec2 VulkanRenderer2D::toNdc(const glm::vec2& pixelPosition) const

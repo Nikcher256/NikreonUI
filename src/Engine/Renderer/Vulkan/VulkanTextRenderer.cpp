@@ -7,6 +7,8 @@
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
+
+#include <glm/common.hpp>
 #include <utility>
 
 #include <ft2build.h>
@@ -17,6 +19,18 @@ namespace Engine {
 namespace {
 
 constexpr std::size_t VerticesPerGlyph = 6;
+
+bool sameClipRect(const UIClipRect& left, const UIClipRect& right)
+{
+    return left.position == right.position && left.size == right.size;
+}
+
+UIClipRect intersectClipRects(const UIClipRect& left, const UIClipRect& right)
+{
+    const glm::vec2 minimum = glm::max(left.position, right.position);
+    const glm::vec2 maximum = glm::min(left.position + left.size, right.position + right.size);
+    return {minimum, glm::max(maximum - minimum, glm::vec2{0.0f, 0.0f})};
+}
 constexpr std::uint32_t AtlasWidth = 512;
 constexpr int FirstGlyph = 32;
 constexpr int LastGlyph = 126;
@@ -81,6 +95,7 @@ void VulkanTextRenderer::begin(const glm::uvec2& viewportSize)
     m_viewportSize = viewportSize;
     m_vertices.clear();
     m_batches.clear();
+    m_clipStack.clear();
 }
 
 bool VulkanTextRenderer::loadFont(const std::string_view name, const std::filesystem::path& path, const float pixelSize)
@@ -214,9 +229,11 @@ void VulkanTextRenderer::drawText(
         pen.x -= measuredWidth;
     }
 
-    if (m_batches.empty() || m_batches.back().font != font) {
+    const UIClipRect clipRect = currentClipRect();
+    if (m_batches.empty() || m_batches.back().font != font || !sameClipRect(m_batches.back().clipRect, clipRect)) {
         m_batches.push_back({
             font,
+            clipRect,
             static_cast<std::uint32_t>(m_vertices.size()),
             0,
         });
@@ -262,6 +279,18 @@ void VulkanTextRenderer::drawText(
         }
 
         pen.x += glyph.advance * scale;
+    }
+}
+
+void VulkanTextRenderer::pushClipRect(const UIClipRect& clipRect)
+{
+    m_clipStack.push_back(m_clipStack.empty() ? clipRect : intersectClipRects(m_clipStack.back(), clipRect));
+}
+
+void VulkanTextRenderer::popClipRect()
+{
+    if (!m_clipStack.empty()) {
+        m_clipStack.pop_back();
     }
 }
 
@@ -313,6 +342,7 @@ void VulkanTextRenderer::record(const VkCommandBuffer commandBuffer) const
             continue;
         }
 
+        setScissor(commandBuffer, batch.clipRect);
         vkCmdBindDescriptorSets(
             commandBuffer,
             VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -741,6 +771,31 @@ void VulkanTextRenderer::setViewportAndScissor(const VkCommandBuffer commandBuff
 
     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+}
+
+void VulkanTextRenderer::setScissor(const VkCommandBuffer commandBuffer, const UIClipRect& clipRect) const
+{
+    const float maxWidth = static_cast<float>(m_viewportSize.x);
+    const float maxHeight = static_cast<float>(m_viewportSize.y);
+    const float x = std::clamp(clipRect.position.x, 0.0f, maxWidth);
+    const float y = std::clamp(clipRect.position.y, 0.0f, maxHeight);
+    const float right = std::clamp(clipRect.position.x + clipRect.size.x, x, maxWidth);
+    const float bottom = std::clamp(clipRect.position.y + clipRect.size.y, y, maxHeight);
+
+    VkRect2D scissor{};
+    scissor.offset = {static_cast<std::int32_t>(x), static_cast<std::int32_t>(y)};
+    scissor.extent = {
+        static_cast<std::uint32_t>(right - x),
+        static_cast<std::uint32_t>(bottom - y),
+    };
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+}
+
+UIClipRect VulkanTextRenderer::currentClipRect() const
+{
+    return m_clipStack.empty()
+        ? UIClipRect{{0.0f, 0.0f}, {static_cast<float>(m_viewportSize.x), static_cast<float>(m_viewportSize.y)}}
+        : m_clipStack.back();
 }
 
 glm::vec2 VulkanTextRenderer::toNdc(const glm::vec2& pixelPosition) const

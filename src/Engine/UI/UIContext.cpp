@@ -2,13 +2,30 @@
 
 #include <algorithm>
 
+#include <glm/common.hpp>
+
 namespace Engine {
+
+namespace {
+
+UIClipRect intersectClipRects(const UIClipRect& left, const UIClipRect& right)
+{
+    const glm::vec2 minimum = glm::max(left.position, right.position);
+    const glm::vec2 maximum = glm::min(left.position + left.size, right.position + right.size);
+    return {minimum, glm::max(maximum - minimum, glm::vec2{0.0f, 0.0f})};
+}
+
+} // namespace
 
 // Captures mouse input once so every widget sees a consistent frame state.
 void UIContext::beginFrame(const UIInputState& input)
 {
     m_hotId.clear();
     m_mousePosition = input.mousePosition;
+    m_scrollDelta = input.scrollDelta;
+    m_typedCharacters = input.typedCharacters;
+    m_pressedKeys = input.pressedKeys;
+    m_clipStack.clear();
     m_previousMouseDown = m_mouseDown;
     m_mouseDown = input.primaryMouseDown;
     m_mousePressed = m_mouseDown && !m_previousMouseDown;
@@ -83,6 +100,58 @@ glm::vec2 UIContext::mousePosition() const
     return m_mousePosition;
 }
 
+glm::vec2 UIContext::scrollDelta() const
+{
+    return m_scrollDelta;
+}
+
+const std::vector<char32_t>& UIContext::typedCharacters() const
+{
+    return m_typedCharacters;
+}
+
+const std::vector<UIKey>& UIContext::pressedKeys() const
+{
+    return m_pressedKeys;
+}
+
+bool UIContext::primaryMousePressed() const
+{
+    return m_mousePressed;
+}
+
+bool UIContext::isMouseInside(const glm::vec2& position, const glm::vec2& size) const
+{
+    return contains(position, size);
+}
+
+void UIContext::focus(const std::string_view id)
+{
+    m_focusedId = id;
+}
+
+void UIContext::clearFocus()
+{
+    m_focusedId.clear();
+}
+
+bool UIContext::isFocused(const std::string_view id) const
+{
+    return m_focusedId == id;
+}
+
+void UIContext::pushClipRect(const UIClipRect& clipRect)
+{
+    m_clipStack.push_back(m_clipStack.empty() ? clipRect : intersectClipRects(m_clipStack.back(), clipRect));
+}
+
+void UIContext::popClipRect()
+{
+    if (!m_clipStack.empty()) {
+        m_clipStack.pop_back();
+    }
+}
+
 // Reports whether a widget is currently under the mouse.
 bool UIContext::isHot(const std::string_view id) const
 {
@@ -98,10 +167,19 @@ bool UIContext::isActive(const std::string_view id) const
 // Tests whether the captured mouse position lies inside a rectangle.
 bool UIContext::contains(const glm::vec2& position, const glm::vec2& size) const
 {
-    return m_mousePosition.x >= position.x &&
+    const bool insideWidget = m_mousePosition.x >= position.x &&
         m_mousePosition.y >= position.y &&
         m_mousePosition.x <= position.x + size.x &&
         m_mousePosition.y <= position.y + size.y;
+    if (!insideWidget || m_clipStack.empty()) {
+        return insideWidget;
+    }
+
+    const UIClipRect& clipRect = m_clipStack.back();
+    return m_mousePosition.x >= clipRect.position.x &&
+        m_mousePosition.y >= clipRect.position.y &&
+        m_mousePosition.x <= clipRect.position.x + clipRect.size.x &&
+        m_mousePosition.y <= clipRect.position.y + clipRect.size.y;
 }
 
 } // namespace Engine

@@ -55,6 +55,8 @@ public:
         std::string_view text,
         std::string_view fontName = "default",
         float scale = 1.0f) const override;
+    void pushClipRect(const UIClipRect& clipRect) override;
+    void popClipRect() override;
     void end() override;
 
     void record(VkCommandBuffer commandBuffer) const;
@@ -81,6 +83,7 @@ private:
 
     struct Batch {
         const Font* font{nullptr};
+        UIClipRect clipRect;
         std::uint32_t firstVertex{0};
         std::uint32_t vertexCount{0};
     };
@@ -99,6 +102,8 @@ private:
     [[nodiscard]] VkCommandBuffer beginSingleUseCommands() const;
     void endSingleUseCommands(VkCommandBuffer commandBuffer) const;
     void setViewportAndScissor(VkCommandBuffer commandBuffer) const;
+    void setScissor(VkCommandBuffer commandBuffer, const UIClipRect& clipRect) const;
+    [[nodiscard]] UIClipRect currentClipRect() const;
     [[nodiscard]] glm::vec2 toNdc(const glm::vec2& pixelPosition) const;
     [[nodiscard]] VkShaderModule createShaderModule(const std::vector<char>& bytecode) const;
     [[nodiscard]] std::uint32_t findMemoryType(std::uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
@@ -124,6 +129,7 @@ private:
     std::size_t m_maxGlyphs{0};
     std::vector<Vertex> m_vertices;
     std::vector<Batch> m_batches;
+    std::vector<UIClipRect> m_clipStack;
     std::unordered_map<std::string, Font> m_fonts;
 };
 

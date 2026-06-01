@@ -51,6 +51,8 @@ public:
         const glm::vec4& fillColor,
         const glm::vec4& borderColor,
         float borderWidth = 0.0f) override;
+    void pushClipRect(const UIClipRect& clipRect) override;
+    void popClipRect() override;
     void end() override;
     void record(VkCommandBuffer commandBuffer);
 
@@ -66,6 +68,14 @@ private:
     void uploadVertices();
     void uploadSdfInstances();
     void setViewportAndScissor(VkCommandBuffer commandBuffer) const;
+    void setScissor(VkCommandBuffer commandBuffer, const UIClipRect& clipRect) const;
+    [[nodiscard]] UIClipRect currentClipRect() const;
+
+    struct DrawBatch {
+        UIClipRect clipRect;
+        std::uint32_t first{0};
+        std::uint32_t count{0};
+    };
 
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& buffer, VkDeviceMemory& memory);
     [[nodiscard]] glm::vec2 toNdc(const glm::vec2& pixelPosition) const;
@@ -97,6 +107,9 @@ private:
     std::size_t m_maxQuads{0};
     std::vector<Vertex> m_vertices;
     std::vector<SdfInstance> m_sdfInstances;
+    std::vector<DrawBatch> m_quadBatches;
+    std::vector<DrawBatch> m_sdfBatches;
+    std::vector<UIClipRect> m_clipStack;
 };
 
 } // namespace Engine

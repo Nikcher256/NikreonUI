@@ -4,7 +4,8 @@ Reusable native GPU UI and text rendering library extracted from Nikreon Engine.
 
 Current features:
 
-- Retained buttons, checkboxes, sliders, and scrub-style number inputs
+- Retained buttons, checkboxes, sliders, scrub-style number inputs, and text inputs
+- Nested clip rectangles and wheel-driven scroll containers
 - Row, column, dock, stack, padding, gap, alignment, and anchor layouts
 - CSS-like style parsing with widget and text classes
 - CSS-like `type`, `type.class`, `type#id`, and `type.class#id` selectors
@@ -37,7 +38,7 @@ Supported selector forms:
 | --- | --- |
 | Global UI settings | `ui` |
 | Shared box style | `toolbar`, `panel`, `field` |
-| Widget or text type | `button`, `checkbox`, `slider`, `number-input`, `text` |
+| Widget or text type | `button`, `checkbox`, `slider`, `number-input`, `text-input`, `text` |
 | Type with reusable class | `button.toolbar`, `text.muted` |
 | Type with unique ID | `button#toolbar.stop` |
 | Type with class and ID | `button.toolbar#toolbar.stop` |
@@ -114,6 +115,18 @@ properties plus:
 | --- | --- |
 | `hover-fill` | RGBA color |
 | `accent` | RGBA left-edge accent color |
+
+### `text-input`
+
+Text inputs support focus, printable ASCII insertion, caret movement, delete,
+backspace, home, end, enter-to-commit, and escape-to-blur. They support all
+shared box properties plus:
+
+| Property | Value |
+| --- | --- |
+| `hover-fill` | RGBA color |
+| `focused-fill` | RGBA color |
+| `focused-border-color` | RGBA color |
 
 ### `text`
 

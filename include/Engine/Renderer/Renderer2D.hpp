@@ -5,6 +5,11 @@
 
 namespace Engine {
 
+struct UIClipRect {
+    glm::vec2 position{0.0f, 0.0f};
+    glm::vec2 size{0.0f, 0.0f};
+};
+
 class Renderer2D {
 public:
     virtual ~Renderer2D() = default;
@@ -19,6 +24,8 @@ public:
         const glm::vec4& fillColor,
         const glm::vec4& borderColor,
         float borderWidth = 0.0f) = 0;
+    virtual void pushClipRect(const UIClipRect& clipRect) = 0;
+    virtual void popClipRect() = 0;
     virtual void end() = 0;
 };
 

@@ -6,6 +6,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
 
+#include "Engine/Renderer/Renderer2D.hpp"
+
 namespace Engine {
 
 enum class TextAlignment {
@@ -31,6 +33,8 @@ public:
         std::string_view text,
         std::string_view fontName = "default",
         float scale = 1.0f) const = 0;
+    virtual void pushClipRect(const UIClipRect& clipRect) = 0;
+    virtual void popClipRect() = 0;
     virtual void end() = 0;
 };
 

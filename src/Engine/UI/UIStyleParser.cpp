@@ -217,6 +217,22 @@ UINumberInputStyle& resolveNumberInput(UIStyle& style, const std::string& styleC
     return style.numberInputClasses.try_emplace(styleClass, style.numberInput).first->second;
 }
 
+UITextInputStyle& resolveTextInput(UIStyle& style, const std::string& styleClass, const std::string& id)
+{
+    if (!id.empty()) {
+        const UITextInputStyle base = styleClass.empty()
+            ? style.textInput
+            : style.textInputClasses.try_emplace(styleClass, style.textInput).first->second;
+        return style.textInputIds.try_emplace(id, base).first->second;
+    }
+
+    if (styleClass.empty()) {
+        return style.textInput;
+    }
+
+    return style.textInputClasses.try_emplace(styleClass, style.textInput).first->second;
+}
+
 UITextStyle& resolveText(UIStyle& style, const std::string& styleClass, const std::string& id)
 {
     if (!id.empty()) {
@@ -306,6 +322,24 @@ bool applyNumberInputProperty(UINumberInputStyle& numberInput, const std::string
     }
     if (property == "accent") {
         return parseVec4(value, numberInput.accent);
+    }
+
+    return false;
+}
+
+bool applyTextInputProperty(UITextInputStyle& textInput, const std::string_view property, const std::string_view value)
+{
+    if (applyBoxProperty(textInput.box, property, value)) {
+        return true;
+    }
+    if (property == "hover-fill") {
+        return parseVec4(value, textInput.hovered);
+    }
+    if (property == "focused-fill") {
+        return parseVec4(value, textInput.focused);
+    }
+    if (property == "focused-border-color") {
+        return parseVec4(value, textInput.focusedBorder);
     }
 
     return false;
@@ -406,6 +440,9 @@ bool applyProperty(UIStyle& style, const std::string_view selector, const std::s
     }
     if (parsed.type == "number-input") {
         return applyNumberInputProperty(resolveNumberInput(style, parsed.styleClass, parsed.id), property, value);
+    }
+    if (parsed.type == "text-input") {
+        return applyTextInputProperty(resolveTextInput(style, parsed.styleClass, parsed.id), property, value);
     }
     if (parsed.type == "text") {
         return applyTextProperty(resolveText(style, parsed.styleClass, parsed.id), property, value);
