@@ -1,0 +1,11 @@
+{
+  "name": "nikreon-ui",
+  "version-string": "0.1.0",
+  "description": "Reusable native GPU UI and text rendering library.",
+  "dependencies": [
+    "glm",
+    "freetype",
+    "volk",
+    "vulkan-headers"
+  ]
+}
