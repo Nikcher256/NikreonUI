@@ -341,6 +341,12 @@ bool applyTextInputProperty(UITextInputStyle& textInput, const std::string_view 
     if (property == "focused-border-color") {
         return parseVec4(value, textInput.focusedBorder);
     }
+    if (property == "scrollbar-track-color") {
+        return parseVec4(value, textInput.scrollbarTrack);
+    }
+    if (property == "scrollbar-thumb-color") {
+        return parseVec4(value, textInput.scrollbarThumb);
+    }
 
     return false;
 }

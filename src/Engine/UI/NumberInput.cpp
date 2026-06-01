@@ -36,7 +36,7 @@ void NumberInput::update(UIContext& context)
     m_wasHeld = m_interaction.held;
 }
 
-// Draws a compact Unreal-like scrub field with a left accent edge.
+// Draws a compact Unreal-like scrub field with a value-proportional fill.
 void NumberInput::render(Renderer2D& renderer2D, const UIStyle& style) const
 {
     if (!m_visible) {
@@ -54,7 +54,7 @@ void NumberInput::render(Renderer2D& renderer2D, const UIStyle& style) const
         inputStyle.box.borderWidth);
     renderer2D.drawSdfRect(
         m_position,
-        {std::min(3.0f, m_size.x), m_size.y},
+        {m_size.x * normalizedValue(), m_size.y},
         inputStyle.box.borderRadius,
         inputStyle.accent,
         inputStyle.accent,
@@ -105,6 +105,15 @@ void NumberInput::setOnValueChanged(std::function<void(float)> callback)
 float NumberInput::value() const
 {
     return m_value;
+}
+
+float NumberInput::normalizedValue() const
+{
+    if (m_maxValue <= m_minValue) {
+        return 0.0f;
+    }
+
+    return std::clamp((m_value - m_minValue) / (m_maxValue - m_minValue), 0.0f, 1.0f);
 }
 
 std::string NumberInput::formattedValue() const

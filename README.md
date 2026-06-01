@@ -108,25 +108,30 @@ Sliders support all shared box properties plus:
 
 ### `number-input`
 
-Number inputs support horizontal mouse-drag scrubbing and all shared box
-properties plus:
+Number inputs support horizontal mouse-drag scrubbing, a value-proportional
+filled background, and all shared box properties plus:
 
 | Property | Value |
 | --- | --- |
 | `hover-fill` | RGBA color |
-| `accent` | RGBA left-edge accent color |
+| `accent` | RGBA filled-value color |
 
 ### `text-input`
 
 Text inputs support focus, UTF-8 insertion, caret movement on UTF-8 boundaries,
-shift-selection, delete, backspace, home, end, enter-to-commit, and
-escape-to-blur. They support all shared box properties plus:
+click-to-position, mouse-drag and shift-selection, automatic and thumb-draggable
+horizontal scrolling for overflow, delete, backspace, home, end, enter-to-commit, and
+escape-to-blur. Pointer selection and overflow scrolling use the
+`TextRenderer`-aware `update` overload. Text inputs support all shared box
+properties plus:
 
 | Property | Value |
 | --- | --- |
 | `hover-fill` | RGBA color |
 | `focused-fill` | RGBA color |
 | `focused-border-color` | RGBA color |
+| `scrollbar-track-color` | RGBA horizontal overflow track color |
+| `scrollbar-thumb-color` | RGBA horizontal overflow thumb color |
 
 ### `text`
 

@@ -25,6 +25,7 @@ public:
     void setOnValueChanged(std::function<void(float)> callback);
 
     [[nodiscard]] float value() const;
+    [[nodiscard]] float normalizedValue() const;
     [[nodiscard]] std::string formattedValue() const;
 
 private:

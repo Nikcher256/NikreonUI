@@ -82,6 +82,8 @@ struct UITextInputStyle {
     glm::vec4 hovered{0.18f, 0.21f, 0.27f, 1.0f};
     glm::vec4 focused{0.16f, 0.19f, 0.25f, 1.0f};
     glm::vec4 focusedBorder{0.44f, 0.70f, 1.0f, 1.0f};
+    glm::vec4 scrollbarTrack{0.10f, 0.12f, 0.16f, 1.0f};
+    glm::vec4 scrollbarThumb{0.44f, 0.70f, 1.0f, 1.0f};
 };
 
 enum class UITextHorizontalAlignment {

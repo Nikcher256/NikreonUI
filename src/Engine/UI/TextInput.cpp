@@ -1,6 +1,7 @@
 #include "Engine/UI/TextInput.hpp"
 
 #include "Engine/Renderer/Renderer2D.hpp"
+#include "Engine/Renderer/TextRenderer.hpp"
 #include "Engine/UI/UIStyle.hpp"
 
 #include <algorithm>
@@ -72,15 +73,49 @@ TextInput::TextInput(std::string id, std::string value)
 
 void TextInput::update(UIContext& context)
 {
+    updateEditing(context, nullptr, nullptr, "default", 1.0f);
+}
+
+void TextInput::update(
+    UIContext& context,
+    const TextRenderer& textRenderer,
+    const UIStyle& style,
+    const std::string_view fontName,
+    const float scale)
+{
+    const UITextInputStyle& inputStyle = m_styleOverride ? *m_styleOverride : style.resolveTextInput(m_styleClass, m_id);
+    updateEditing(context, &textRenderer, &inputStyle, fontName, scale);
+}
+
+void TextInput::updateEditing(
+    UIContext& context,
+    const TextRenderer* textRenderer,
+    const UITextInputStyle* inputStyle,
+    const std::string_view fontName,
+    const float scale)
+{
     Widget::update(context);
-    if (m_interaction.pressed) {
+    if (context.primaryMousePressed() && m_interaction.hovered) {
         context.focus(m_id);
+        constexpr float scrollbarInteractionHeight = 7.0f;
+        const bool pressedScrollbar = m_horizontalScrollRange > 0.0f &&
+            context.mousePosition().y >= m_position.y + m_size.y - scrollbarInteractionHeight;
+        if (textRenderer && inputStyle && !pressedScrollbar) {
+            moveCaret(caretIndexAt(context.mousePosition().x, *textRenderer, *inputStyle, fontName, scale), context.shiftDown());
+        }
     } else if (context.primaryMousePressed() && !m_interaction.hovered && context.isFocused(m_id)) {
         context.clearFocus();
     }
 
     m_focused = context.isFocused(m_id);
+    if (m_focused && m_interaction.held && textRenderer && inputStyle) {
+        moveCaret(caretIndexAt(context.mousePosition().x, *textRenderer, *inputStyle, fontName, scale), true);
+    }
     if (!m_focused) {
+        if (textRenderer && inputStyle) {
+            ensureCaretVisible(*textRenderer, *inputStyle, fontName, scale);
+            updateHorizontalScrollbar(context, *inputStyle);
+        }
         return;
     }
 
@@ -141,6 +176,11 @@ void TextInput::update(UIContext& context)
     if (changed) {
         notifyValueChanged();
     }
+
+    if (textRenderer && inputStyle) {
+        ensureCaretVisible(*textRenderer, *inputStyle, fontName, scale);
+        updateHorizontalScrollbar(context, *inputStyle);
+    }
 }
 
 void TextInput::render(Renderer2D& renderer2D, const UIStyle& style) const
@@ -157,6 +197,29 @@ void TextInput::render(Renderer2D& renderer2D, const UIStyle& style) const
             : inputStyle.box.fill;
     const glm::vec4 border = m_focused ? inputStyle.focusedBorder : inputStyle.box.border;
     renderer2D.drawSdfRect(m_position, m_size, inputStyle.box.borderRadius, fill, border, inputStyle.box.borderWidth);
+    if (m_horizontalScrollRange > 0.0f) {
+        constexpr float trackHeight = 3.0f;
+        const float trackWidth = std::max(m_size.x - inputStyle.box.padding.x * 2.0f, 1.0f);
+        const float thumbWidth = std::max(trackWidth * trackWidth / (trackWidth + m_horizontalScrollRange), 18.0f);
+        const float thumbTravel = std::max(trackWidth - thumbWidth, 0.0f);
+        const float thumbX = m_position.x + inputStyle.box.padding.x +
+            thumbTravel * (m_horizontalScrollOffset / m_horizontalScrollRange);
+        const float trackY = m_position.y + m_size.y - trackHeight - 2.0f;
+        renderer2D.drawSdfRect(
+            {m_position.x + inputStyle.box.padding.x, trackY},
+            {trackWidth, trackHeight},
+            1.5f,
+            inputStyle.scrollbarTrack,
+            inputStyle.scrollbarTrack,
+            0.0f);
+        renderer2D.drawSdfRect(
+            {thumbX, trackY},
+            {thumbWidth, trackHeight},
+            1.5f,
+            inputStyle.scrollbarThumb,
+            inputStyle.scrollbarThumb,
+            0.0f);
+    }
 }
 
 void TextInput::setValue(std::string value)
@@ -221,6 +284,16 @@ bool TextInput::focused() const
     return m_focused;
 }
 
+float TextInput::horizontalScrollOffset() const
+{
+    return m_horizontalScrollOffset;
+}
+
+float TextInput::horizontalScrollRange() const
+{
+    return m_horizontalScrollRange;
+}
+
 void TextInput::notifyValueChanged() const
 {
     if (m_onValueChanged) {
@@ -245,6 +318,77 @@ void TextInput::moveCaret(const std::size_t caretIndex, const bool extendSelecti
     if (!extendSelection) {
         m_selectionAnchor = m_caretIndex;
     }
+}
+
+std::size_t TextInput::caretIndexAt(
+    const float mouseX,
+    const TextRenderer& textRenderer,
+    const UITextInputStyle& inputStyle,
+    const std::string_view fontName,
+    const float scale) const
+{
+    const float targetX = std::max(mouseX - m_position.x - inputStyle.box.padding.x + m_horizontalScrollOffset, 0.0f);
+    std::size_t boundary = 0;
+    float previousWidth = 0.0f;
+    while (boundary < m_value.size()) {
+        const std::size_t next = nextBoundary(m_value, boundary);
+        const float nextWidth = textRenderer.measureText(std::string_view{m_value.data(), next}, fontName, scale).x;
+        if (targetX < previousWidth + (nextWidth - previousWidth) * 0.5f) {
+            return boundary;
+        }
+        boundary = next;
+        previousWidth = nextWidth;
+    }
+    return m_value.size();
+}
+
+void TextInput::ensureCaretVisible(
+    const TextRenderer& textRenderer,
+    const UITextInputStyle& inputStyle,
+    const std::string_view fontName,
+    const float scale)
+{
+    const float availableWidth = std::max(m_size.x - inputStyle.box.padding.x * 2.0f, 1.0f);
+    const float textWidth = textRenderer.measureText(m_value, fontName, scale).x;
+    const float caretX = textRenderer.measureText(std::string_view{m_value.data(), m_caretIndex}, fontName, scale).x;
+    m_horizontalScrollRange = std::max(textWidth - availableWidth, 0.0f);
+    if (caretX < m_horizontalScrollOffset) {
+        m_horizontalScrollOffset = caretX;
+    } else if (caretX > m_horizontalScrollOffset + availableWidth) {
+        m_horizontalScrollOffset = caretX - availableWidth;
+    }
+    m_horizontalScrollOffset = std::clamp(m_horizontalScrollOffset, 0.0f, m_horizontalScrollRange);
+}
+
+void TextInput::updateHorizontalScrollbar(UIContext& context, const UITextInputStyle& inputStyle)
+{
+    if (m_horizontalScrollRange <= 0.0f) {
+        m_scrollThumbWasHeld = false;
+        return;
+    }
+
+    constexpr float interactionHeight = 7.0f;
+    const float trackWidth = std::max(m_size.x - inputStyle.box.padding.x * 2.0f, 1.0f);
+    const float thumbWidth = std::max(trackWidth * trackWidth / (trackWidth + m_horizontalScrollRange), 18.0f);
+    const float thumbTravel = std::max(trackWidth - thumbWidth, 0.0f);
+    const float thumbX = m_position.x + inputStyle.box.padding.x +
+        thumbTravel * (m_horizontalScrollOffset / m_horizontalScrollRange);
+    const UIInteraction thumb = context.interact(
+        m_id + ".horizontal-scrollbar",
+        {thumbX, m_position.y + m_size.y - interactionHeight},
+        {thumbWidth, interactionHeight});
+    if (thumb.held && !m_scrollThumbWasHeld) {
+        m_scrollDragStartOffset = m_horizontalScrollOffset;
+        m_scrollDragStartMouseX = context.mousePosition().x;
+    }
+    if (thumb.held && thumbTravel > 0.0f) {
+        m_horizontalScrollOffset = std::clamp(
+            m_scrollDragStartOffset +
+                (context.mousePosition().x - m_scrollDragStartMouseX) * m_horizontalScrollRange / thumbTravel,
+            0.0f,
+            m_horizontalScrollRange);
+    }
+    m_scrollThumbWasHeld = thumb.held;
 }
 
 } // namespace Engine
