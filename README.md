@@ -111,12 +111,14 @@ composed `TextInput`, plus all shared box properties:
 
 Number inputs support horizontal mouse-drag scrubbing, click-to-edit keyboard
 entry through a composed `TextInput`, clipboard shortcuts, a value-proportional
-filled background, and all shared box properties plus:
+filled background that can be disabled for coordinate-style fields, and all
+shared box properties plus:
 
 | Property | Value |
 | --- | --- |
 | `hover-fill` | RGBA color |
 | `accent` | RGBA filled-value color |
+| `show-value-fill` | `true` or `false` |
 
 ### `text-input`
 

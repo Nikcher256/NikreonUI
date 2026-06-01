@@ -79,6 +79,19 @@ bool parseFloat(const std::string_view text, float& value)
     return true;
 }
 
+bool parseBool(const std::string_view text, bool& value)
+{
+    if (text == "true") {
+        value = true;
+        return true;
+    }
+    if (text == "false") {
+        value = false;
+        return true;
+    }
+    return false;
+}
+
 bool parseVec2(const std::string_view text, glm::vec2& value)
 {
     std::vector<float> values;
@@ -322,6 +335,9 @@ bool applyNumberInputProperty(UINumberInputStyle& numberInput, const std::string
     }
     if (property == "accent") {
         return parseVec4(value, numberInput.accent);
+    }
+    if (property == "show-value-fill") {
+        return parseBool(value, numberInput.showValueFill);
     }
 
     return false;

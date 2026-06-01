@@ -113,13 +113,15 @@ void NumberInput::render(Renderer2D& renderer2D, const UIStyle& style) const
         fill,
         inputStyle.box.border,
         inputStyle.box.borderWidth);
-    renderer2D.drawSdfRect(
-        m_position,
-        {m_size.x * normalizedValue(), m_size.y},
-        inputStyle.box.borderRadius,
-        inputStyle.accent,
-        inputStyle.accent,
-        0.0f);
+    if (inputStyle.showValueFill) {
+        renderer2D.drawSdfRect(
+            m_position,
+            {m_size.x * normalizedValue(), m_size.y},
+            inputStyle.box.borderRadius,
+            inputStyle.accent,
+            inputStyle.accent,
+            0.0f);
+    }
 }
 
 void NumberInput::setValue(const float value)

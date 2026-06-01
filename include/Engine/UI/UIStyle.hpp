@@ -69,6 +69,7 @@ struct UINumberInputStyle {
     };
     glm::vec4 hovered{0.18f, 0.21f, 0.27f, 1.0f};
     glm::vec4 accent{0.36f, 0.58f, 0.82f, 1.0f};
+    bool showValueFill{true};
 };
 
 struct UITextInputStyle {
