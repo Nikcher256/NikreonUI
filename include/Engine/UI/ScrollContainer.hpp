@@ -2,6 +2,8 @@
 
 #include "Engine/Renderer/Renderer2D.hpp"
 
+#include <string>
+
 namespace Engine {
 
 class TextRenderer;
@@ -12,7 +14,9 @@ public:
     void setBounds(const UIClipRect& bounds);
     void setContentHeight(float contentHeight);
     void setWheelStep(float wheelStep);
-    void update(const UIContext& context);
+    explicit ScrollContainer(std::string id = "scroll");
+
+    void update(UIContext& context);
     void pushClip(UIContext& context) const;
     void popClip(UIContext& context) const;
     void pushClip(Renderer2D& renderer2D) const;
@@ -26,11 +30,16 @@ public:
 
 private:
     void clampOffset();
+    [[nodiscard]] UIClipRect thumbBounds() const;
 
+    std::string m_id;
     UIClipRect m_bounds;
     float m_contentHeight{0.0f};
     float m_offset{0.0f};
     float m_wheelStep{32.0f};
+    float m_dragStartOffset{0.0f};
+    float m_dragStartMouseY{0.0f};
+    bool m_thumbWasHeld{false};
 };
 
 } // namespace Engine

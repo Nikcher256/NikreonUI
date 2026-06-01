@@ -8,10 +8,65 @@
 
 namespace Engine {
 
+namespace {
+
+std::string encodeUtf8(const char32_t codepoint)
+{
+    std::string encoded;
+    if (codepoint <= 0x7F) {
+        encoded.push_back(static_cast<char>(codepoint));
+    } else if (codepoint <= 0x7FF) {
+        encoded.push_back(static_cast<char>(0xC0 | (codepoint >> 6)));
+        encoded.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    } else if (codepoint <= 0xFFFF) {
+        encoded.push_back(static_cast<char>(0xE0 | (codepoint >> 12)));
+        encoded.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+        encoded.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    } else if (codepoint <= 0x10FFFF) {
+        encoded.push_back(static_cast<char>(0xF0 | (codepoint >> 18)));
+        encoded.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+        encoded.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+        encoded.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    }
+    return encoded;
+}
+
+bool isContinuation(const char character)
+{
+    return (static_cast<unsigned char>(character) & 0xC0U) == 0x80U;
+}
+
+std::size_t previousBoundary(const std::string& text, std::size_t index)
+{
+    if (index == 0) {
+        return 0;
+    }
+    --index;
+    while (index > 0 && isContinuation(text[index])) {
+        --index;
+    }
+    return index;
+}
+
+std::size_t nextBoundary(const std::string& text, std::size_t index)
+{
+    if (index >= text.size()) {
+        return text.size();
+    }
+    ++index;
+    while (index < text.size() && isContinuation(text[index])) {
+        ++index;
+    }
+    return index;
+}
+
+} // namespace
+
 TextInput::TextInput(std::string id, std::string value)
     : Widget(std::move(id))
     , m_value(std::move(value))
     , m_caretIndex(m_value.size())
+    , m_selectionAnchor(m_value.size())
 {
 }
 
@@ -31,9 +86,12 @@ void TextInput::update(UIContext& context)
 
     bool changed = false;
     for (const char32_t character : context.typedCharacters()) {
-        if (character >= 32 && character <= 126) {
-            m_value.insert(m_caretIndex, 1, static_cast<char>(character));
-            ++m_caretIndex;
+        if (character >= 32) {
+            eraseSelection();
+            const std::string encoded = encodeUtf8(character);
+            m_value.insert(m_caretIndex, encoded);
+            m_caretIndex += encoded.size();
+            m_selectionAnchor = m_caretIndex;
             changed = true;
         }
     }
@@ -41,29 +99,36 @@ void TextInput::update(UIContext& context)
     for (const UIKey key : context.pressedKeys()) {
         switch (key) {
         case UIKey::Backspace:
-            if (m_caretIndex > 0) {
-                m_value.erase(m_caretIndex - 1, 1);
-                --m_caretIndex;
+            if (hasSelection()) {
+                eraseSelection();
+                changed = true;
+            } else if (m_caretIndex > 0) {
+                const std::size_t previous = previousBoundary(m_value, m_caretIndex);
+                m_value.erase(previous, m_caretIndex - previous);
+                moveCaret(previous, false);
                 changed = true;
             }
             break;
         case UIKey::Delete:
-            if (m_caretIndex < m_value.size()) {
-                m_value.erase(m_caretIndex, 1);
+            if (hasSelection()) {
+                eraseSelection();
+                changed = true;
+            } else if (m_caretIndex < m_value.size()) {
+                m_value.erase(m_caretIndex, nextBoundary(m_value, m_caretIndex) - m_caretIndex);
                 changed = true;
             }
             break;
         case UIKey::Left:
-            m_caretIndex = m_caretIndex > 0 ? m_caretIndex - 1 : 0;
+            moveCaret(previousBoundary(m_value, m_caretIndex), context.shiftDown());
             break;
         case UIKey::Right:
-            m_caretIndex = std::min(m_caretIndex + 1, m_value.size());
+            moveCaret(nextBoundary(m_value, m_caretIndex), context.shiftDown());
             break;
         case UIKey::Home:
-            m_caretIndex = 0;
+            moveCaret(0, context.shiftDown());
             break;
         case UIKey::End:
-            m_caretIndex = m_value.size();
+            moveCaret(m_value.size(), context.shiftDown());
             break;
         case UIKey::Enter:
         case UIKey::Escape:
@@ -98,6 +163,7 @@ void TextInput::setValue(std::string value)
 {
     m_value = std::move(value);
     m_caretIndex = std::min(m_caretIndex, m_value.size());
+    m_selectionAnchor = m_caretIndex;
 }
 
 void TextInput::setPlaceholder(std::string placeholder)
@@ -135,6 +201,21 @@ std::size_t TextInput::caretIndex() const
     return m_caretIndex;
 }
 
+std::size_t TextInput::selectionStart() const
+{
+    return std::min(m_caretIndex, m_selectionAnchor);
+}
+
+std::size_t TextInput::selectionEnd() const
+{
+    return std::max(m_caretIndex, m_selectionAnchor);
+}
+
+bool TextInput::hasSelection() const
+{
+    return m_caretIndex != m_selectionAnchor;
+}
+
 bool TextInput::focused() const
 {
     return m_focused;
@@ -144,6 +225,25 @@ void TextInput::notifyValueChanged() const
 {
     if (m_onValueChanged) {
         m_onValueChanged(m_value);
+    }
+}
+
+void TextInput::eraseSelection()
+{
+    if (!hasSelection()) {
+        return;
+    }
+
+    const std::size_t start = selectionStart();
+    m_value.erase(start, selectionEnd() - start);
+    moveCaret(start, false);
+}
+
+void TextInput::moveCaret(const std::size_t caretIndex, const bool extendSelection)
+{
+    m_caretIndex = std::min(caretIndex, m_value.size());
+    if (!extendSelection) {
+        m_selectionAnchor = m_caretIndex;
     }
 }
 

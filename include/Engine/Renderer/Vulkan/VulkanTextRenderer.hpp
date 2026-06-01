@@ -50,11 +50,13 @@ public:
         const glm::vec4& color,
         std::string_view fontName = "default",
         float scale = 1.0f,
-        TextAlignment alignment = TextAlignment::Left) override;
+        TextAlignment alignment = TextAlignment::Left,
+        const TextLayout& layout = {}) override;
     [[nodiscard]] glm::vec2 measureText(
         std::string_view text,
         std::string_view fontName = "default",
-        float scale = 1.0f) const override;
+        float scale = 1.0f,
+        const TextLayout& layout = {}) const override;
     void pushClipRect(const UIClipRect& clipRect) override;
     void popClipRect() override;
     void end() override;
@@ -71,7 +73,7 @@ private:
     };
 
     struct Font {
-        std::unordered_map<char, Glyph> glyphs;
+        std::unordered_map<char32_t, Glyph> glyphs;
         float ascender{0.0f};
         float lineHeight{0.0f};
         VkImage image{VK_NULL_HANDLE};

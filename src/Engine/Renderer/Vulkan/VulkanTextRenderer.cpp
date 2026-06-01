@@ -32,8 +32,6 @@ UIClipRect intersectClipRects(const UIClipRect& left, const UIClipRect& right)
     return {minimum, glm::max(maximum - minimum, glm::vec2{0.0f, 0.0f})};
 }
 constexpr std::uint32_t AtlasWidth = 512;
-constexpr int FirstGlyph = 32;
-constexpr int LastGlyph = 126;
 constexpr std::uint32_t GlyphPadding = 1;
 
 #ifndef NIKREON_SHADER_DIR
@@ -57,6 +55,59 @@ std::uint32_t nextPowerOfTwo(std::uint32_t value)
     value |= value >> 8U;
     value |= value >> 16U;
     return value + 1U;
+}
+
+std::vector<char32_t> decodeUtf8(const std::string_view text)
+{
+    std::vector<char32_t> codepoints;
+    for (std::size_t index = 0; index < text.size();) {
+        const auto first = static_cast<unsigned char>(text[index]);
+        char32_t codepoint = 0;
+        std::size_t length = 1;
+        if ((first & 0x80U) == 0) {
+            codepoint = first;
+        } else if ((first & 0xE0U) == 0xC0U && index + 1 < text.size()) {
+            codepoint = first & 0x1FU;
+            length = 2;
+        } else if ((first & 0xF0U) == 0xE0U && index + 2 < text.size()) {
+            codepoint = first & 0x0FU;
+            length = 3;
+        } else if ((first & 0xF8U) == 0xF0U && index + 3 < text.size()) {
+            codepoint = first & 0x07U;
+            length = 4;
+        } else {
+            ++index;
+            continue;
+        }
+
+        bool valid = true;
+        for (std::size_t offset = 1; offset < length; ++offset) {
+            const auto continuation = static_cast<unsigned char>(text[index + offset]);
+            if ((continuation & 0xC0U) != 0x80U) {
+                valid = false;
+                break;
+            }
+            codepoint = (codepoint << 6U) | (continuation & 0x3FU);
+        }
+        if (valid) {
+            codepoints.push_back(codepoint);
+        }
+        index += valid ? length : 1;
+    }
+    return codepoints;
+}
+
+std::vector<char32_t> defaultGlyphSet()
+{
+    std::vector<char32_t> codepoints;
+    const auto appendRange = [&codepoints](const char32_t first, const char32_t last) {
+        for (char32_t codepoint = first; codepoint <= last; ++codepoint) {
+            codepoints.push_back(codepoint);
+        }
+    };
+    appendRange(32, 255);
+    appendRange(0x0400, 0x04FF);
+    return codepoints;
 }
 
 } // namespace
@@ -127,7 +178,7 @@ bool VulkanTextRenderer::loadFont(const std::string_view name, const std::filesy
     }
 
     struct PackedGlyph {
-        char character{0};
+        char32_t character{0};
         std::uint32_t x{0};
         std::uint32_t y{0};
         std::uint32_t width{0};
@@ -135,13 +186,14 @@ bool VulkanTextRenderer::loadFont(const std::string_view name, const std::filesy
     };
 
     std::vector<PackedGlyph> packedGlyphs;
-    packedGlyphs.reserve(LastGlyph - FirstGlyph + 1);
+    const std::vector<char32_t> codepoints = defaultGlyphSet();
+    packedGlyphs.reserve(codepoints.size());
 
     std::uint32_t cursorX = GlyphPadding;
     std::uint32_t cursorY = GlyphPadding;
     std::uint32_t rowHeight = 0;
 
-    for (int character = FirstGlyph; character <= LastGlyph; ++character) {
+    for (const char32_t character : codepoints) {
         if (FT_Load_Char(face, static_cast<FT_ULong>(character), FT_LOAD_RENDER) != 0) {
             continue;
         }
@@ -155,7 +207,7 @@ bool VulkanTextRenderer::loadFont(const std::string_view name, const std::filesy
         }
 
         packedGlyphs.push_back({
-            static_cast<char>(character),
+            character,
             cursorX,
             cursorY,
             width,
@@ -214,7 +266,8 @@ void VulkanTextRenderer::drawText(
     const glm::vec4& color,
     const std::string_view fontName,
     const float scale,
-    const TextAlignment alignment)
+    const TextAlignment alignment,
+    const TextLayout& layout)
 {
     const Font* font = findFont(fontName);
     if (font == nullptr || scale <= 0.0f || text.empty()) {
@@ -222,7 +275,7 @@ void VulkanTextRenderer::drawText(
     }
 
     glm::vec2 pen = position;
-    const float measuredWidth = measureText(text, fontName, scale).x;
+    const float measuredWidth = measureText(text, fontName, scale, layout).x;
     if (alignment == TextAlignment::Center) {
         pen.x -= measuredWidth * 0.5f;
     } else if (alignment == TextAlignment::Right) {
@@ -240,10 +293,12 @@ void VulkanTextRenderer::drawText(
     }
 
     Batch& batch = m_batches.back();
-    for (const char character : text) {
+    const float lineAdvance = font->lineHeight * scale * std::max(layout.lineSpacing, 0.0f);
+    const float lineStartX = pen.x;
+    for (const char32_t character : decodeUtf8(text)) {
         if (character == '\n') {
-            pen.x = position.x;
-            pen.y += font->lineHeight * scale;
+            pen.x = lineStartX;
+            pen.y += lineAdvance;
             continue;
         }
 
@@ -253,6 +308,10 @@ void VulkanTextRenderer::drawText(
         }
 
         const Glyph& glyph = found->second;
+        if (layout.wordWrap && layout.maxWidth > 0.0f && pen.x > lineStartX && pen.x + glyph.advance * scale > lineStartX + layout.maxWidth) {
+            pen.x = lineStartX;
+            pen.y += lineAdvance;
+        }
         if (m_vertices.size() + VerticesPerGlyph > m_maxGlyphs * VerticesPerGlyph) {
             return;
         }
@@ -294,7 +353,11 @@ void VulkanTextRenderer::popClipRect()
     }
 }
 
-glm::vec2 VulkanTextRenderer::measureText(const std::string_view text, const std::string_view fontName, const float scale) const
+glm::vec2 VulkanTextRenderer::measureText(
+    const std::string_view text,
+    const std::string_view fontName,
+    const float scale,
+    const TextLayout& layout) const
 {
     const Font* font = findFont(fontName);
     if (font == nullptr || scale <= 0.0f) {
@@ -303,17 +366,23 @@ glm::vec2 VulkanTextRenderer::measureText(const std::string_view text, const std
 
     float width = 0.0f;
     float maxWidth = 0.0f;
+    const float lineAdvance = font->lineHeight * std::max(layout.lineSpacing, 0.0f);
     float height = font->lineHeight;
-    for (const char character : text) {
+    for (const char32_t character : decodeUtf8(text)) {
         if (character == '\n') {
             maxWidth = std::max(maxWidth, width);
             width = 0.0f;
-            height += font->lineHeight;
+            height += lineAdvance;
             continue;
         }
 
         const auto found = font->glyphs.find(character);
         if (found != font->glyphs.end()) {
+            if (layout.wordWrap && layout.maxWidth > 0.0f && width > 0.0f && width + found->second.advance > layout.maxWidth / scale) {
+                maxWidth = std::max(maxWidth, width);
+                width = 0.0f;
+                height += lineAdvance;
+            }
             width += found->second.advance;
         }
     }

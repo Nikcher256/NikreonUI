@@ -28,6 +28,7 @@ void UIContext::beginFrame(const UIInputState& input)
     m_clipStack.clear();
     m_previousMouseDown = m_mouseDown;
     m_mouseDown = input.primaryMouseDown;
+    m_shiftDown = input.shiftDown;
     m_mousePressed = m_mouseDown && !m_previousMouseDown;
     m_mouseReleased = !m_mouseDown && m_previousMouseDown;
 }
@@ -118,6 +119,11 @@ const std::vector<UIKey>& UIContext::pressedKeys() const
 bool UIContext::primaryMousePressed() const
 {
     return m_mousePressed;
+}
+
+bool UIContext::shiftDown() const
+{
+    return m_shiftDown;
 }
 
 bool UIContext::isMouseInside(const glm::vec2& position, const glm::vec2& size) const

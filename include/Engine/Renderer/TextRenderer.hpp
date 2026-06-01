@@ -16,6 +16,12 @@ enum class TextAlignment {
     Right,
 };
 
+struct TextLayout {
+    float maxWidth{0.0f};
+    float lineSpacing{1.0f};
+    bool wordWrap{false};
+};
+
 class TextRenderer {
 public:
     virtual ~TextRenderer() = default;
@@ -28,11 +34,13 @@ public:
         const glm::vec4& color,
         std::string_view fontName = "default",
         float scale = 1.0f,
-        TextAlignment alignment = TextAlignment::Left) = 0;
+        TextAlignment alignment = TextAlignment::Left,
+        const TextLayout& layout = {}) = 0;
     [[nodiscard]] virtual glm::vec2 measureText(
         std::string_view text,
         std::string_view fontName = "default",
-        float scale = 1.0f) const = 0;
+        float scale = 1.0f,
+        const TextLayout& layout = {}) const = 0;
     virtual void pushClipRect(const UIClipRect& clipRect) = 0;
     virtual void popClipRect() = 0;
     virtual void end() = 0;

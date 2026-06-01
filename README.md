@@ -5,12 +5,12 @@ Reusable native GPU UI and text rendering library extracted from Nikreon Engine.
 Current features:
 
 - Retained buttons, checkboxes, sliders, scrub-style number inputs, and text inputs
-- Nested clip rectangles and wheel-driven scroll containers
+- Nested clip rectangles and wheel-driven scroll containers with draggable thumbs
 - Row, column, dock, stack, padding, gap, alignment, and anchor layouts
 - CSS-like style parsing with widget and text classes
 - CSS-like `type`, `type.class`, `type#id`, and `type.class#id` selectors
 - Batched Vulkan quads and SDF rounded rectangles
-- FreeType font atlas generation and batched Vulkan glyph rendering
+- FreeType growing font atlas generation and batched UTF-8 Vulkan glyph rendering
 
 The library intentionally does not own an application window, swapchain, or editor panels. Consumers provide input snapshots and Vulkan frame resources.
 
@@ -118,9 +118,9 @@ properties plus:
 
 ### `text-input`
 
-Text inputs support focus, printable ASCII insertion, caret movement, delete,
-backspace, home, end, enter-to-commit, and escape-to-blur. They support all
-shared box properties plus:
+Text inputs support focus, UTF-8 insertion, caret movement on UTF-8 boundaries,
+shift-selection, delete, backspace, home, end, enter-to-commit, and
+escape-to-blur. They support all shared box properties plus:
 
 | Property | Value |
 | --- | --- |
@@ -142,3 +142,6 @@ shared box properties plus:
 
 Text alignment is resolved inside the consumer-provided text rectangle.
 `offset` is applied after alignment.
+
+`TextRenderer::drawText` and `measureText` also accept `TextLayout` options for
+line spacing, maximum width, and basic wrapping.

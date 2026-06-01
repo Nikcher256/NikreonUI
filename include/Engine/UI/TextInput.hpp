@@ -25,14 +25,20 @@ public:
     [[nodiscard]] const std::string& value() const;
     [[nodiscard]] const std::string& placeholder() const;
     [[nodiscard]] std::size_t caretIndex() const;
+    [[nodiscard]] std::size_t selectionStart() const;
+    [[nodiscard]] std::size_t selectionEnd() const;
+    [[nodiscard]] bool hasSelection() const;
     [[nodiscard]] bool focused() const;
 
 private:
     void notifyValueChanged() const;
+    void eraseSelection();
+    void moveCaret(std::size_t caretIndex, bool extendSelection);
 
     std::string m_value;
     std::string m_placeholder;
     std::size_t m_caretIndex{0};
+    std::size_t m_selectionAnchor{0};
     bool m_focused{false};
     std::optional<UITextInputStyle> m_styleOverride;
     std::function<void(std::string_view)> m_onValueChanged;

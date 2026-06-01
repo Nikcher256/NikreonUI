@@ -25,6 +25,7 @@ struct UIInputState {
     glm::vec2 mousePosition{0.0f, 0.0f};
     glm::vec2 scrollDelta{0.0f, 0.0f};
     bool primaryMouseDown{false};
+    bool shiftDown{false};
     std::vector<char32_t> typedCharacters;
     std::vector<UIKey> pressedKeys;
 };
@@ -50,6 +51,7 @@ public:
     [[nodiscard]] const std::vector<char32_t>& typedCharacters() const;
     [[nodiscard]] const std::vector<UIKey>& pressedKeys() const;
     [[nodiscard]] bool primaryMousePressed() const;
+    [[nodiscard]] bool shiftDown() const;
     [[nodiscard]] bool isMouseInside(const glm::vec2& position, const glm::vec2& size) const;
     void focus(std::string_view id);
     void clearFocus();
@@ -74,6 +76,7 @@ private:
     bool m_previousMouseDown{false};
     bool m_mousePressed{false};
     bool m_mouseReleased{false};
+    bool m_shiftDown{false};
 };
 
 } // namespace Engine
