@@ -98,7 +98,8 @@ Checkboxes support all shared box properties plus:
 
 ### `slider`
 
-Sliders support all shared box properties plus:
+Sliders support drag-to-change and click-to-edit keyboard entry through a
+composed `TextInput`, plus all shared box properties:
 
 | Property | Value |
 | --- | --- |
@@ -108,7 +109,8 @@ Sliders support all shared box properties plus:
 
 ### `number-input`
 
-Number inputs support horizontal mouse-drag scrubbing, a value-proportional
+Number inputs support horizontal mouse-drag scrubbing, click-to-edit keyboard
+entry through a composed `TextInput`, clipboard shortcuts, a value-proportional
 filled background, and all shared box properties plus:
 
 | Property | Value |

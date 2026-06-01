@@ -1,9 +1,11 @@
 #include "Engine/UI/NumberInput.hpp"
 
 #include "Engine/Renderer/Renderer2D.hpp"
+#include "Engine/Renderer/TextRenderer.hpp"
 #include "Engine/UI/UIStyle.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
@@ -12,28 +14,87 @@
 namespace Engine {
 
 NumberInput::NumberInput(std::string id, const float value, const float minValue, const float maxValue)
-    : Widget(std::move(id))
+    : Widget(id)
     , m_value(value)
     , m_minValue(minValue)
     , m_maxValue(maxValue)
+    , m_textEditor(std::move(id) + ".text-editor")
 {
     setValue(value);
+    m_textEditor.setOnValueChanged([this](const std::string_view text) {
+        const std::string input{text};
+        char* end = nullptr;
+        const float parsedValue = std::strtof(input.c_str(), &end);
+        if (end != nullptr && *end == '\0' && std::isfinite(parsedValue)) {
+            setValue(parsedValue);
+        }
+    });
 }
 
 // Scrubs the value horizontally while the control owns the mouse drag.
 void NumberInput::update(UIContext& context)
 {
+    updateScrubbing(context);
+}
+
+void NumberInput::update(
+    UIContext& context,
+    const TextRenderer& textRenderer,
+    const UIStyle& style,
+    const std::string_view fontName,
+    const float scale)
+{
+    m_textEditor.setBounds(m_position, m_size);
+    if (!m_editing) {
+        updateScrubbing(context);
+        if (m_interaction.pressed && !m_dragged) {
+            beginEditing(context);
+        }
+    }
+
+    if (m_editing) {
+        const UINumberInputStyle& inputStyle = m_styleOverride ? *m_styleOverride : style.resolveNumberInput(m_styleClass, m_id);
+        UITextInputStyle textInputStyle;
+        textInputStyle.box = inputStyle.box;
+        textInputStyle.hovered = inputStyle.hovered;
+        textInputStyle.focused = inputStyle.box.fill;
+        textInputStyle.focusedBorder = inputStyle.box.border;
+        m_textEditor.setStyle(textInputStyle);
+        m_textEditor.update(context, textRenderer, style, fontName, scale);
+        m_interaction = m_textEditor.interaction();
+        if (!m_textEditor.focused()) {
+            m_editing = false;
+            m_textEditor.setValue(formattedValue());
+        }
+    }
+}
+
+void NumberInput::updateScrubbing(UIContext& context)
+{
     Widget::update(context);
     if (m_interaction.held && !m_wasHeld) {
         m_dragStartValue = m_value;
         m_dragStartMouseX = context.mousePosition().x;
+        m_dragged = false;
     }
 
     if (m_interaction.held) {
-        setValue(m_dragStartValue + (context.mousePosition().x - m_dragStartMouseX) * m_sensitivity);
+        const float distance = context.mousePosition().x - m_dragStartMouseX;
+        m_dragged = m_dragged || std::abs(distance) >= 3.0f;
+        if (m_dragged) {
+            setValue(m_dragStartValue + distance * m_sensitivity);
+        }
     }
 
     m_wasHeld = m_interaction.held;
+}
+
+void NumberInput::beginEditing(UIContext& context)
+{
+    m_editing = true;
+    m_textEditor.setValue(formattedValue());
+    m_textEditor.selectAll();
+    context.focus(m_textEditor.id());
 }
 
 // Draws a compact Unreal-like scrub field with a value-proportional fill.
@@ -68,6 +129,9 @@ void NumberInput::setValue(const float value)
     if (std::abs(oldValue - m_value) > 0.0001f && m_onValueChanged) {
         m_onValueChanged(m_value);
     }
+    if (!m_editing) {
+        m_textEditor.setValue(formattedValue());
+    }
 }
 
 void NumberInput::setRange(const float minValue, const float maxValue)
@@ -85,6 +149,9 @@ void NumberInput::setSensitivity(const float sensitivity)
 void NumberInput::setPrecision(const int precision)
 {
     m_precision = std::clamp(precision, 0, 6);
+    if (!m_editing) {
+        m_textEditor.setValue(formattedValue());
+    }
 }
 
 void NumberInput::setStyle(const UINumberInputStyle& style)
@@ -121,6 +188,16 @@ std::string NumberInput::formattedValue() const
     std::ostringstream stream;
     stream << std::fixed << std::setprecision(m_precision) << m_value;
     return stream.str();
+}
+
+bool NumberInput::editing() const
+{
+    return m_editing;
+}
+
+const TextInput& NumberInput::textEditor() const
+{
+    return m_textEditor;
 }
 
 } // namespace Engine

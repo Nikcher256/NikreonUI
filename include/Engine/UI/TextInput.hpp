@@ -25,6 +25,7 @@ public:
     void setStyle(const UITextInputStyle& style);
     void clearStyleOverride();
     void setOnValueChanged(std::function<void(std::string_view)> callback);
+    void selectAll();
 
     [[nodiscard]] const std::string& value() const;
     [[nodiscard]] const std::string& placeholder() const;

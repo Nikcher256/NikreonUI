@@ -178,8 +178,7 @@ void TextInput::updateEditing(
             moveCaret(m_value.size(), context.shiftDown());
             break;
         case UIKey::SelectAll:
-            m_selectionAnchor = 0;
-            m_caretIndex = m_value.size();
+            selectAll();
             break;
         case UIKey::Copy:
             if (hasSelection()) {
@@ -282,6 +281,12 @@ void TextInput::clearStyleOverride()
 void TextInput::setOnValueChanged(std::function<void(std::string_view)> callback)
 {
     m_onValueChanged = std::move(callback);
+}
+
+void TextInput::selectAll()
+{
+    m_selectionAnchor = 0;
+    m_caretIndex = m_value.size();
 }
 
 const std::string& TextInput::value() const

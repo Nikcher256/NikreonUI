@@ -1,9 +1,11 @@
 #include "Engine/UI/Slider.hpp"
 
 #include "Engine/Renderer/Renderer2D.hpp"
+#include "Engine/Renderer/TextRenderer.hpp"
 #include "Engine/UI/UIStyle.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
@@ -12,24 +14,88 @@
 namespace Engine {
 
 Slider::Slider(std::string id, const float value, const float minValue, const float maxValue)
-    : Widget(std::move(id))
+    : Widget(id)
     , m_value(value)
     , m_minValue(minValue)
     , m_maxValue(maxValue)
+    , m_textEditor(std::move(id) + ".text-editor")
 {
     setValue(value);
+    m_textEditor.setOnValueChanged([this](const std::string_view text) {
+        const std::string input{text};
+        char* end = nullptr;
+        const float parsedValue = std::strtof(input.c_str(), &end);
+        if (end != nullptr && *end == '\0' && std::isfinite(parsedValue)) {
+            setValue(parsedValue);
+        }
+    });
 }
 
 // Updates the slider value while the user drags the track.
 void Slider::update(UIContext& context)
 {
+    updateDragging(context);
+}
+
+void Slider::update(
+    UIContext& context,
+    const TextRenderer& textRenderer,
+    const UIStyle& style,
+    const std::string_view fontName,
+    const float scale)
+{
+    m_textEditor.setBounds(m_position, m_size);
+    if (!m_editing) {
+        updateDragging(context);
+        if (m_interaction.pressed && !m_dragged) {
+            beginEditing(context);
+        }
+    }
+
+    if (m_editing) {
+        const UISliderStyle& sliderStyle = m_styleOverride ? *m_styleOverride : style.resolveSlider(m_styleClass, m_id);
+        UITextInputStyle textInputStyle;
+        textInputStyle.box = sliderStyle.track;
+        textInputStyle.hovered = sliderStyle.hovered;
+        textInputStyle.focused = sliderStyle.track.fill;
+        textInputStyle.focusedBorder = sliderStyle.track.border;
+        m_textEditor.setStyle(textInputStyle);
+        m_textEditor.update(context, textRenderer, style, fontName, scale);
+        m_interaction = m_textEditor.interaction();
+        if (!m_textEditor.focused()) {
+            m_editing = false;
+            m_textEditor.setValue(formattedValue());
+        }
+    }
+}
+
+void Slider::updateDragging(UIContext& context)
+{
     Widget::update(context);
+    if (m_interaction.held && !m_wasHeld) {
+        m_dragStartValue = m_value;
+        m_dragStartMouseX = context.mousePosition().x;
+        m_dragged = false;
+    }
     if (!m_interaction.held || m_maxValue <= m_minValue) {
+        m_wasHeld = m_interaction.held;
         return;
     }
 
-    const float t = std::clamp((context.mousePosition().x - m_position.x) / std::max(m_size.x, 1.0f), 0.0f, 1.0f);
-    setValue(m_minValue + (m_maxValue - m_minValue) * t);
+    m_dragged = m_dragged || std::abs(context.mousePosition().x - m_dragStartMouseX) >= 3.0f;
+    if (m_dragged) {
+        const float t = std::clamp((context.mousePosition().x - m_position.x) / std::max(m_size.x, 1.0f), 0.0f, 1.0f);
+        setValue(m_minValue + (m_maxValue - m_minValue) * t);
+    }
+    m_wasHeld = m_interaction.held;
+}
+
+void Slider::beginEditing(UIContext& context)
+{
+    m_editing = true;
+    m_textEditor.setValue(formattedValue());
+    m_textEditor.selectAll();
+    context.focus(m_textEditor.id());
 }
 
 // Draws the slider track, fill, and knob.
@@ -70,6 +136,9 @@ void Slider::setValue(const float value)
     if (std::abs(oldValue - m_value) > 0.0001f && m_onValueChanged) {
         m_onValueChanged(m_value);
     }
+    if (!m_editing) {
+        m_textEditor.setValue(formattedValue());
+    }
 }
 
 // Changes the valid slider range and reclamps the current value.
@@ -83,6 +152,9 @@ void Slider::setRange(const float minValue, const float maxValue)
 void Slider::setPrecision(const int precision)
 {
     m_precision = std::clamp(precision, 0, 6);
+    if (!m_editing) {
+        m_textEditor.setValue(formattedValue());
+    }
 }
 
 // Overrides the resolved slider style for this specific slider instance.
@@ -124,6 +196,16 @@ std::string Slider::formattedValue() const
     std::ostringstream stream;
     stream << std::fixed << std::setprecision(m_precision) << m_value;
     return stream.str();
+}
+
+bool Slider::editing() const
+{
+    return m_editing;
+}
+
+const TextInput& Slider::textEditor() const
+{
+    return m_textEditor;
 }
 
 } // namespace Engine
