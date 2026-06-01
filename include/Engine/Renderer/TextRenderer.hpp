@@ -36,6 +36,11 @@ public:
         float scale = 1.0f,
         TextAlignment alignment = TextAlignment::Left,
         const TextLayout& layout = {}) = 0;
+    virtual void drawSolidRect(
+        const glm::vec2& position,
+        const glm::vec2& size,
+        const glm::vec4& color,
+        std::string_view fontName = "default") = 0;
     [[nodiscard]] virtual glm::vec2 measureText(
         std::string_view text,
         std::string_view fontName = "default",

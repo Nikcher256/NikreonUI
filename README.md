@@ -150,3 +150,5 @@ Text alignment is resolved inside the consumer-provided text rectangle.
 
 `TextRenderer::drawText` and `measureText` also accept `TextLayout` options for
 line spacing, maximum width, and basic wrapping.
+`TextRenderer::drawSolidRect` emits clipped post-text overlays such as carets
+without making UI code depend on a renderer backend.

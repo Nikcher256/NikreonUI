@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstring>
 #include <fstream>
+#include <iterator>
 #include <stdexcept>
 
 #include <glm/common.hpp>
@@ -255,6 +256,14 @@ bool VulkanTextRenderer::loadFont(const std::string_view name, const std::filesy
     }
 
     destroyFace();
+    const auto solidPixel = std::max_element(pixels.begin(), pixels.end());
+    if (solidPixel != pixels.end()) {
+        const std::size_t solidIndex = static_cast<std::size_t>(std::distance(pixels.begin(), solidPixel));
+        font.solidUv = {
+            (static_cast<float>(solidIndex % AtlasWidth) + 0.5f) / static_cast<float>(AtlasWidth),
+            (static_cast<float>(solidIndex / AtlasWidth) + 0.5f) / static_cast<float>(atlasHeight),
+        };
+    }
     createFontTexture(font, pixels, AtlasWidth, atlasHeight);
     m_fonts.emplace(fontName, std::move(font));
     return true;
@@ -339,6 +348,41 @@ void VulkanTextRenderer::drawText(
 
         pen.x += glyph.advance * scale;
     }
+}
+
+void VulkanTextRenderer::drawSolidRect(
+    const glm::vec2& position,
+    const glm::vec2& size,
+    const glm::vec4& color,
+    const std::string_view fontName)
+{
+    const Font* font = findFont(fontName);
+    if (font == nullptr || size.x <= 0.0f || size.y <= 0.0f ||
+        m_vertices.size() + VerticesPerGlyph > m_maxGlyphs * VerticesPerGlyph) {
+        return;
+    }
+
+    const UIClipRect clipRect = currentClipRect();
+    if (m_batches.empty() || m_batches.back().font != font || !sameClipRect(m_batches.back().clipRect, clipRect)) {
+        m_batches.push_back({
+            font,
+            clipRect,
+            static_cast<std::uint32_t>(m_vertices.size()),
+            0,
+        });
+    }
+
+    const glm::vec2 p0 = toNdc(position);
+    const glm::vec2 p1 = toNdc({position.x + size.x, position.y});
+    const glm::vec2 p2 = toNdc(position + size);
+    const glm::vec2 p3 = toNdc({position.x, position.y + size.y});
+    m_vertices.push_back({p0, font->solidUv, color});
+    m_vertices.push_back({p1, font->solidUv, color});
+    m_vertices.push_back({p2, font->solidUv, color});
+    m_vertices.push_back({p2, font->solidUv, color});
+    m_vertices.push_back({p3, font->solidUv, color});
+    m_vertices.push_back({p0, font->solidUv, color});
+    m_batches.back().vertexCount += static_cast<std::uint32_t>(VerticesPerGlyph);
 }
 
 void VulkanTextRenderer::pushClipRect(const UIClipRect& clipRect)

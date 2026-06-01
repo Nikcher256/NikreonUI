@@ -52,6 +52,11 @@ public:
         float scale = 1.0f,
         TextAlignment alignment = TextAlignment::Left,
         const TextLayout& layout = {}) override;
+    void drawSolidRect(
+        const glm::vec2& position,
+        const glm::vec2& size,
+        const glm::vec4& color,
+        std::string_view fontName = "default") override;
     [[nodiscard]] glm::vec2 measureText(
         std::string_view text,
         std::string_view fontName = "default",
@@ -76,6 +81,7 @@ private:
         std::unordered_map<char32_t, Glyph> glyphs;
         float ascender{0.0f};
         float lineHeight{0.0f};
+        glm::vec2 solidUv{0.0f, 0.0f};
         VkImage image{VK_NULL_HANDLE};
         VkDeviceMemory imageMemory{VK_NULL_HANDLE};
         VkImageView imageView{VK_NULL_HANDLE};
