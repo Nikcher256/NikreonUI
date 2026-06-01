@@ -61,6 +61,18 @@ std::size_t nextBoundary(const std::string& text, std::size_t index)
     return index;
 }
 
+std::string sanitizeSingleLineText(const std::string_view text)
+{
+    std::string sanitized;
+    sanitized.reserve(text.size());
+    for (const unsigned char character : text) {
+        if (character >= 32 && character != 127) {
+            sanitized.push_back(static_cast<char>(character));
+        }
+    }
+    return sanitized;
+}
+
 } // namespace
 
 TextInput::TextInput(std::string id, std::string value)
@@ -165,6 +177,29 @@ void TextInput::updateEditing(
         case UIKey::End:
             moveCaret(m_value.size(), context.shiftDown());
             break;
+        case UIKey::SelectAll:
+            m_selectionAnchor = 0;
+            m_caretIndex = m_value.size();
+            break;
+        case UIKey::Copy:
+            if (hasSelection()) {
+                context.setClipboardText(std::string_view{
+                    m_value.data() + selectionStart(),
+                    selectionEnd() - selectionStart(),
+                });
+            }
+            break;
+        case UIKey::Paste: {
+            const std::string pastedText = sanitizeSingleLineText(context.clipboardText());
+            if (!pastedText.empty()) {
+                eraseSelection();
+                m_value.insert(m_caretIndex, pastedText);
+                m_caretIndex += pastedText.size();
+                m_selectionAnchor = m_caretIndex;
+                changed = true;
+            }
+            break;
+        }
         case UIKey::Enter:
         case UIKey::Escape:
             context.clearFocus();

@@ -23,6 +23,8 @@ void UIContext::beginFrame(const UIInputState& input)
     m_hotId.clear();
     m_mousePosition = input.mousePosition;
     m_scrollDelta = input.scrollDelta;
+    m_clipboardText = input.clipboardText;
+    m_setClipboardText = input.setClipboardText;
     m_typedCharacters = input.typedCharacters;
     m_pressedKeys = input.pressedKeys;
     m_clipStack.clear();
@@ -124,6 +126,18 @@ bool UIContext::primaryMousePressed() const
 bool UIContext::shiftDown() const
 {
     return m_shiftDown;
+}
+
+std::string_view UIContext::clipboardText() const
+{
+    return m_clipboardText;
+}
+
+void UIContext::setClipboardText(const std::string_view text) const
+{
+    if (m_setClipboardText) {
+        m_setClipboardText(text);
+    }
 }
 
 bool UIContext::isMouseInside(const glm::vec2& position, const glm::vec2& size) const

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -17,6 +18,9 @@ enum class UIKey {
     Right,
     Home,
     End,
+    SelectAll,
+    Copy,
+    Paste,
     Enter,
     Escape,
 };
@@ -26,6 +30,8 @@ struct UIInputState {
     glm::vec2 scrollDelta{0.0f, 0.0f};
     bool primaryMouseDown{false};
     bool shiftDown{false};
+    std::string clipboardText;
+    std::function<void(std::string_view)> setClipboardText;
     std::vector<char32_t> typedCharacters;
     std::vector<UIKey> pressedKeys;
 };
@@ -52,6 +58,8 @@ public:
     [[nodiscard]] const std::vector<UIKey>& pressedKeys() const;
     [[nodiscard]] bool primaryMousePressed() const;
     [[nodiscard]] bool shiftDown() const;
+    [[nodiscard]] std::string_view clipboardText() const;
+    void setClipboardText(std::string_view text) const;
     [[nodiscard]] bool isMouseInside(const glm::vec2& position, const glm::vec2& size) const;
     void focus(std::string_view id);
     void clearFocus();
@@ -68,6 +76,8 @@ private:
     glm::vec2 m_scrollDelta{0.0f, 0.0f};
     std::vector<char32_t> m_typedCharacters;
     std::vector<UIKey> m_pressedKeys;
+    std::string m_clipboardText;
+    std::function<void(std::string_view)> m_setClipboardText;
     std::vector<UIClipRect> m_clipStack;
     std::string m_hotId;
     std::string m_activeId;
