@@ -47,6 +47,7 @@ add_library(NikreonUI STATIC
     src/Engine/UI/Button.cpp
     src/Engine/UI/Checkbox.cpp
     src/Engine/UI/Layout.cpp
+    src/Engine/UI/NumberInput.cpp
     src/Engine/UI/Slider.cpp
     src/Engine/UI/UIContext.cpp
     src/Engine/UI/UIStyleParser.cpp

@@ -59,6 +59,18 @@ struct UISliderStyle {
     glm::vec4 knob{0.72f, 0.84f, 0.96f, 1.0f};
 };
 
+struct UINumberInputStyle {
+    UIBoxStyle box{
+        {0.13f, 0.145f, 0.18f, 1.0f},
+        {0.24f, 0.29f, 0.36f, 1.0f},
+        1.0f,
+        4.0f,
+        {8.0f, 5.0f},
+    };
+    glm::vec4 hovered{0.18f, 0.21f, 0.27f, 1.0f};
+    glm::vec4 accent{0.36f, 0.58f, 0.82f, 1.0f};
+};
+
 enum class UITextHorizontalAlignment {
     Left,
     Center,
@@ -107,14 +119,17 @@ struct UIStyle {
     UIButtonStyle button;
     UICheckboxStyle checkbox;
     UISliderStyle slider;
+    UINumberInputStyle numberInput;
     UITextStyle text;
     std::unordered_map<std::string, UIButtonStyle> buttonClasses;
     std::unordered_map<std::string, UICheckboxStyle> checkboxClasses;
     std::unordered_map<std::string, UISliderStyle> sliderClasses;
+    std::unordered_map<std::string, UINumberInputStyle> numberInputClasses;
     std::unordered_map<std::string, UITextStyle> textClasses;
     std::unordered_map<std::string, UIButtonStyle> buttonIds;
     std::unordered_map<std::string, UICheckboxStyle> checkboxIds;
     std::unordered_map<std::string, UISliderStyle> sliderIds;
+    std::unordered_map<std::string, UINumberInputStyle> numberInputIds;
     std::unordered_map<std::string, UITextStyle> textIds;
     glm::vec4 hierarchySelected{0.20f, 0.32f, 0.48f, 1.0f};
     glm::vec4 hierarchyHovered{0.17f, 0.19f, 0.24f, 1.0f};
@@ -180,6 +195,25 @@ struct UIStyle {
         }
 
         return slider;
+    }
+
+    [[nodiscard]] const UINumberInputStyle& resolveNumberInput(std::string_view styleClass, std::string_view id = {}) const
+    {
+        if (!id.empty()) {
+            const auto found = numberInputIds.find(std::string(id));
+            if (found != numberInputIds.end()) {
+                return found->second;
+            }
+        }
+
+        if (!styleClass.empty()) {
+            const auto found = numberInputClasses.find(std::string(styleClass));
+            if (found != numberInputClasses.end()) {
+                return found->second;
+            }
+        }
+
+        return numberInput;
     }
 
     [[nodiscard]] const UITextStyle& resolveText(std::string_view styleClass, std::string_view id = {}) const

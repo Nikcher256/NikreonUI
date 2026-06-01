@@ -201,6 +201,22 @@ UISliderStyle& resolveSlider(UIStyle& style, const std::string& styleClass, cons
     return style.sliderClasses.try_emplace(styleClass, style.slider).first->second;
 }
 
+UINumberInputStyle& resolveNumberInput(UIStyle& style, const std::string& styleClass, const std::string& id)
+{
+    if (!id.empty()) {
+        const UINumberInputStyle base = styleClass.empty()
+            ? style.numberInput
+            : style.numberInputClasses.try_emplace(styleClass, style.numberInput).first->second;
+        return style.numberInputIds.try_emplace(id, base).first->second;
+    }
+
+    if (styleClass.empty()) {
+        return style.numberInput;
+    }
+
+    return style.numberInputClasses.try_emplace(styleClass, style.numberInput).first->second;
+}
+
 UITextStyle& resolveText(UIStyle& style, const std::string& styleClass, const std::string& id)
 {
     if (!id.empty()) {
@@ -275,6 +291,21 @@ bool applySliderProperty(UISliderStyle& slider, const std::string_view property,
     }
     if (property == "knob-color") {
         return parseVec4(value, slider.knob);
+    }
+
+    return false;
+}
+
+bool applyNumberInputProperty(UINumberInputStyle& numberInput, const std::string_view property, const std::string_view value)
+{
+    if (applyBoxProperty(numberInput.box, property, value)) {
+        return true;
+    }
+    if (property == "hover-fill") {
+        return parseVec4(value, numberInput.hovered);
+    }
+    if (property == "accent") {
+        return parseVec4(value, numberInput.accent);
     }
 
     return false;
@@ -372,6 +403,9 @@ bool applyProperty(UIStyle& style, const std::string_view selector, const std::s
     }
     if (parsed.type == "slider") {
         return applySliderProperty(resolveSlider(style, parsed.styleClass, parsed.id), property, value);
+    }
+    if (parsed.type == "number-input") {
+        return applyNumberInputProperty(resolveNumberInput(style, parsed.styleClass, parsed.id), property, value);
     }
     if (parsed.type == "text") {
         return applyTextProperty(resolveText(style, parsed.styleClass, parsed.id), property, value);

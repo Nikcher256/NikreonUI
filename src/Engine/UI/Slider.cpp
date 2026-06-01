@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
+#include <sstream>
 #include <utility>
 
 namespace Engine {
@@ -78,6 +80,11 @@ void Slider::setRange(const float minValue, const float maxValue)
     setValue(m_value);
 }
 
+void Slider::setPrecision(const int precision)
+{
+    m_precision = std::clamp(precision, 0, 6);
+}
+
 // Overrides the resolved slider style for this specific slider instance.
 void Slider::setStyle(const UISliderStyle& style)
 {
@@ -110,6 +117,13 @@ float Slider::normalizedValue() const
     }
 
     return std::clamp((m_value - m_minValue) / (m_maxValue - m_minValue), 0.0f, 1.0f);
+}
+
+std::string Slider::formattedValue() const
+{
+    std::ostringstream stream;
+    stream << std::fixed << std::setprecision(m_precision) << m_value;
+    return stream.str();
 }
 
 } // namespace Engine
