@@ -154,6 +154,7 @@ bool VulkanTextRenderer::loadFont(const std::string_view name, const std::filesy
     std::vector<std::uint8_t> pixels(static_cast<std::size_t>(AtlasWidth) * atlasHeight, 0);
 
     Font font;
+    font.ascender = static_cast<float>(face->size->metrics.ascender >> 6);
     font.lineHeight = static_cast<float>(face->size->metrics.height >> 6);
 
     for (const PackedGlyph& packed : packedGlyphs) {
@@ -241,7 +242,7 @@ void VulkanTextRenderer::drawText(
 
         const glm::vec2 glyphPosition{
             pen.x + glyph.bearing.x * scale,
-            pen.y + (font->lineHeight - glyph.bearing.y) * scale,
+            pen.y + (font->ascender - glyph.bearing.y) * scale,
         };
         const glm::vec2 glyphSize = glyph.size * scale;
 

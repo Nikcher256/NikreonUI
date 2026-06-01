@@ -70,6 +70,7 @@ private:
 
     struct Font {
         std::unordered_map<char, Glyph> glyphs;
+        float ascender{0.0f};
         float lineHeight{0.0f};
         VkImage image{VK_NULL_HANDLE};
         VkDeviceMemory imageMemory{VK_NULL_HANDLE};
