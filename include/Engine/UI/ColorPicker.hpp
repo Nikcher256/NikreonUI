@@ -32,6 +32,7 @@ private:
     [[nodiscard]] glm::vec2 popupPosition() const;
 
     glm::vec4 m_color{1.0f, 1.0f, 1.0f, 1.0f};
+    glm::vec4 m_originalColor{1.0f, 1.0f, 1.0f, 1.0f};
     float m_hue{0.0f};
     float m_saturation{0.0f};
     float m_value{1.0f};

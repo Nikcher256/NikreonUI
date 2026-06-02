@@ -15,12 +15,15 @@ namespace Engine {
 namespace {
 
 constexpr float ButtonHeight = 28.0f;
-constexpr glm::vec2 PopupSize{228.0f, 250.0f};
+constexpr glm::vec2 PopupSize{228.0f, 278.0f};
 constexpr glm::vec2 SaturationValueOffset{12.0f, 12.0f};
 constexpr glm::vec2 SaturationValueSize{174.0f, 150.0f};
 constexpr glm::vec2 HueOffset{194.0f, 12.0f};
 constexpr glm::vec2 HueSize{22.0f, 150.0f};
-constexpr float ChannelTrackY = 176.0f;
+constexpr glm::vec2 OldPreviewOffset{12.0f, 176.0f};
+constexpr glm::vec2 CurrentPreviewOffset{116.0f, 176.0f};
+constexpr glm::vec2 PreviewSize{100.0f, 18.0f};
+constexpr float ChannelTrackY = 204.0f;
 constexpr float ChannelTrackHeight = 14.0f;
 constexpr float ChannelTrackSpacing = 20.0f;
 constexpr int SaturationValueSteps = 16;
@@ -66,6 +69,9 @@ void ColorPicker::update(UIContext& context)
     m_interaction = context.interact(m_id + ".button", m_position, {m_size.x, ButtonHeight});
     if (m_interaction.pressed) {
         m_popupOpen = !m_popupOpen;
+        if (m_popupOpen) {
+            m_originalColor = m_color;
+        }
     }
 }
 
@@ -83,6 +89,9 @@ void ColorPicker::updatePopup(UIContext& context)
 
     updateSaturationValue(context);
     updateHue(context);
+    if (context.interact(m_id + ".old-preview", popup + OldPreviewOffset, PreviewSize).pressed) {
+        setColor(m_originalColor);
+    }
     updateChannel(context, ".red", ChannelTrackY, m_color.r);
     updateChannel(context, ".green", ChannelTrackY + ChannelTrackSpacing, m_color.g);
     updateChannel(context, ".blue", ChannelTrackY + ChannelTrackSpacing * 2.0f, m_color.b);
@@ -94,14 +103,13 @@ void ColorPicker::render(Renderer2D& renderer2D, const UIStyle& style) const
 
     const glm::vec4 border = style.field.border;
     renderer2D.drawSdfRect(m_position, {m_size.x, ButtonHeight}, 4.0f, style.field.fill, border, 1.0f);
-    renderer2D.drawSdfRect(m_position + glm::vec2{4.0f}, {ButtonHeight - 8.0f, ButtonHeight - 8.0f}, 3.0f, m_color, border, 1.0f);
     renderer2D.drawSdfRect(
-        {m_position.x + ButtonHeight + 4.0f, m_position.y + 11.0f},
-        {std::max(m_size.x - ButtonHeight - 12.0f, 0.0f), 6.0f},
+        m_position + glm::vec2{4.0f},
+        {std::max(m_size.x - 8.0f, 0.0f), ButtonHeight - 8.0f},
         3.0f,
         m_color,
-        m_color,
-        0.0f);
+        border,
+        1.0f);
 }
 
 void ColorPicker::renderPopup(Renderer2D& renderer2D, const UIStyle& style) const
@@ -109,7 +117,10 @@ void ColorPicker::renderPopup(Renderer2D& renderer2D, const UIStyle& style) cons
     if (!m_visible || !m_popupOpen) return;
 
     const glm::vec2 popup = popupPosition();
-    renderer2D.drawSdfRect(popup, PopupSize, 6.0f, style.panel.fill, style.panel.border, 1.0f);
+    // Keep the popup shell in the quad batch so it records before the palette
+    // quads. SDF rectangles are recorded as a later batch by VulkanRenderer2D.
+    renderer2D.drawQuad(popup, PopupSize, style.panel.fill);
+    renderer2D.drawRect(popup, PopupSize, style.panel.border, 1.0f);
 
     const glm::vec2 svPosition = popup + SaturationValueOffset;
     const glm::vec2 cellSize = SaturationValueSize / static_cast<float>(SaturationValueSteps);
@@ -139,6 +150,10 @@ void ColorPicker::renderPopup(Renderer2D& renderer2D, const UIStyle& style) cons
         {HueSize.x + 4.0f, 4.0f},
         {1.0f, 1.0f, 1.0f, 1.0f},
         1.0f);
+    renderer2D.drawQuad(popup + OldPreviewOffset, PreviewSize, m_originalColor);
+    renderer2D.drawRect(popup + OldPreviewOffset, PreviewSize, style.field.border, 1.0f);
+    renderer2D.drawQuad(popup + CurrentPreviewOffset, PreviewSize, m_color);
+    renderer2D.drawRect(popup + CurrentPreviewOffset, PreviewSize, style.field.border, 1.0f);
 
     const glm::vec4 channels[] = {
         {0.86f, 0.22f, 0.24f, 1.0f},
@@ -230,7 +245,8 @@ void ColorPicker::updateHsvFromColor()
 
 glm::vec2 ColorPicker::popupPosition() const
 {
-    return {m_position.x - PopupSize.x - 8.0f, m_position.y + ButtonHeight + 6.0f};
+    const float left = m_position.x - PopupSize.x - 8.0f;
+    return {left >= 8.0f ? left : m_position.x + m_size.x + 8.0f, m_position.y + ButtonHeight + 6.0f};
 }
 
 } // namespace Engine
