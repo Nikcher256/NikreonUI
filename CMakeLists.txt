@@ -16,6 +16,7 @@ add_library(NikreonUICore STATIC
     src/Engine/UI/BasicWidgets.cpp
     src/Engine/UI/Button.cpp
     src/Engine/UI/Checkbox.cpp
+    src/Engine/UI/ColorPicker.cpp
     src/Engine/UI/Layout.cpp
     src/Engine/UI/NumberInput.cpp
     src/Engine/UI/ScrollContainer.cpp
