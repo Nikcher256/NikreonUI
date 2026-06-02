@@ -263,7 +263,8 @@ void TextInput::render(const UIFrame& frame) const
     const UITextInputStyle& inputStyle = m_styleOverride ? *m_styleOverride : frame.style().resolveTextInput(m_styleClass, m_id);
     const glm::vec4 fill = m_focused ? inputStyle.focused : m_interaction.hovered ? inputStyle.hovered : inputStyle.box.fill;
     frame.shapes().drawSdfRect(frame.toScreen(m_position), m_size, inputStyle.box.borderRadius, fill, m_focused ? inputStyle.focusedBorder : inputStyle.box.border, inputStyle.box.borderWidth);
-    renderText(frame.text(), frame.style(), "default", 1.0f, frame.surface().origin);
+    const UITextStyle& textStyle = frame.style().resolveText(m_value.empty() ? "input-placeholder" : "input-value");
+    renderText(frame.text(), frame.style(), textStyle.font, textStyle.scale, frame.surface().origin);
 }
 
 void TextInput::renderText(
@@ -279,10 +280,10 @@ void TextInput::renderText(
 
     const UITextInputStyle& inputStyle = m_styleOverride ? *m_styleOverride : style.resolveTextInput(m_styleClass, m_id);
     const UIClipRect clipRect{
-        origin + m_position + glm::vec2{inputStyle.box.padding.x, 2.0f},
+        origin + m_position + glm::vec2{inputStyle.box.padding.x, 1.0f},
         {
             std::max(m_size.x - inputStyle.box.padding.x * 2.0f, 0.0f),
-            std::max(m_size.y - 6.0f, 0.0f),
+            std::max(m_size.y - 2.0f, 0.0f),
         },
     };
     const float textX = origin.x + m_position.x + inputStyle.box.padding.x - m_horizontalScrollOffset;
