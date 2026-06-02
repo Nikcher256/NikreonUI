@@ -140,6 +140,17 @@ void NumberInput::render(const UIFrame& frame) const
     }
 }
 
+void NumberInput::renderTextOnly(const UIFrame& frame) const
+{
+    if (!m_visible) return;
+    if (m_editing) {
+        const UITextStyle& textStyle = frame.style().resolveText("input-value");
+        m_textEditor.renderText(frame.text(), frame.style(), textStyle.font, textStyle.scale, frame.surface().origin);
+    } else {
+        frame.drawText(formattedValue(), {m_position, m_size}, frame.style().resolveText("control-value"));
+    }
+}
+
 void NumberInput::setValue(const float value)
 {
     const float oldValue = m_value;

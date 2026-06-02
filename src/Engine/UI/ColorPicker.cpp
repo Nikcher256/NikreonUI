@@ -31,9 +31,7 @@ constexpr glm::vec2 PreviewSize{100.0f, 18.0f};
 constexpr float ChannelTrackY = 204.0f;
 constexpr float ChannelTrackHeight = 14.0f;
 constexpr float ChannelTrackSpacing = 20.0f;
-constexpr float ChannelTrackWidth = 146.0f;
-constexpr float ChannelInputX = 164.0f;
-constexpr float ChannelInputWidth = 52.0f;
+constexpr float ChannelTrackWidth = 204.0f;
 constexpr glm::vec2 HexInputOffset{12.0f, 276.0f};
 constexpr glm::vec2 HexInputSize{204.0f, 22.0f};
 constexpr int SaturationValueSteps = 24;
@@ -101,6 +99,9 @@ ColorPicker::ColorPicker(std::string id, const glm::vec4& color)
     m_redInput.setPrecision(0);
     m_greenInput.setPrecision(0);
     m_blueInput.setPrecision(0);
+    m_redInput.setSensitivity(255.0f / ChannelTrackWidth);
+    m_greenInput.setSensitivity(255.0f / ChannelTrackWidth);
+    m_blueInput.setSensitivity(255.0f / ChannelTrackWidth);
     m_redInput.setOnValueChanged([this](const float value) { if (!m_syncingInputs) { m_color.r = value / 255.0f; updateHsvFromColor(); syncHexInput(); notifyColorChanged(); } });
     m_greenInput.setOnValueChanged([this](const float value) { if (!m_syncingInputs) { m_color.g = value / 255.0f; updateHsvFromColor(); syncHexInput(); notifyColorChanged(); } });
     m_blueInput.setOnValueChanged([this](const float value) { if (!m_syncingInputs) { m_color.b = value / 255.0f; updateHsvFromColor(); syncHexInput(); notifyColorChanged(); } });
@@ -167,12 +168,10 @@ void ColorPicker::render(Renderer2D& renderer2D, const UIStyle& style) const
     if (!m_visible) return;
 
     const glm::vec4 border = style.field.border;
-    renderer2D.drawQuad(m_position, {m_size.x, ButtonHeight}, style.field.fill);
-    renderer2D.drawRect(m_position, {m_size.x, ButtonHeight}, border, 1.0f);
+    renderer2D.drawSdfRect(m_position, {m_size.x, ButtonHeight}, 4.0f, style.field.fill, border, 1.0f);
     const glm::vec2 swatchPosition = m_position + glm::vec2{4.0f};
     const glm::vec2 swatchSize{std::max(m_size.x - 8.0f, 0.0f), ButtonHeight - 8.0f};
-    renderer2D.drawQuad(swatchPosition, swatchSize, m_color);
-    renderer2D.drawRect(swatchPosition, swatchSize, border, 1.0f);
+    renderer2D.drawSdfRect(swatchPosition, swatchSize, 3.0f, m_color, border, 1.0f);
 }
 
 void ColorPicker::renderPopup(UIContext& context, Renderer2D& renderer2D, TextRenderer& textRenderer, const UIStyle& style) const
@@ -231,9 +230,9 @@ void ColorPicker::renderPopup(UIContext& context, Renderer2D& renderer2D, TextRe
         renderer2D.drawRect(trackPosition + glm::vec2{ChannelTrackWidth * values[index] - 2.0f, -2.0f}, {4.0f, ChannelTrackHeight + 4.0f}, glm::vec4{1.0f}, 1.0f);
     }
     UIFrame frame{context, renderer2D, textRenderer, style};
-    m_redInput.render(frame);
-    m_greenInput.render(frame);
-    m_blueInput.render(frame);
+    m_redInput.renderTextOnly(frame);
+    m_greenInput.renderTextOnly(frame);
+    m_blueInput.renderTextOnly(frame);
     m_hexInput.render(frame);
 }
 
@@ -300,9 +299,9 @@ void ColorPicker::updateChannel(UIContext& context, const std::string_view suffi
 void ColorPicker::layoutChannelInputs()
 {
     const glm::vec2 popup = popupPosition();
-    m_redInput.setBounds(popup + glm::vec2{ChannelInputX, ChannelTrackY - 4.0f}, {ChannelInputWidth, 22.0f});
-    m_greenInput.setBounds(popup + glm::vec2{ChannelInputX, ChannelTrackY + ChannelTrackSpacing - 4.0f}, {ChannelInputWidth, 22.0f});
-    m_blueInput.setBounds(popup + glm::vec2{ChannelInputX, ChannelTrackY + ChannelTrackSpacing * 2.0f - 4.0f}, {ChannelInputWidth, 22.0f});
+    m_redInput.setBounds(popup + glm::vec2{12.0f, ChannelTrackY - 4.0f}, {ChannelTrackWidth, 22.0f});
+    m_greenInput.setBounds(popup + glm::vec2{12.0f, ChannelTrackY + ChannelTrackSpacing - 4.0f}, {ChannelTrackWidth, 22.0f});
+    m_blueInput.setBounds(popup + glm::vec2{12.0f, ChannelTrackY + ChannelTrackSpacing * 2.0f - 4.0f}, {ChannelTrackWidth, 22.0f});
     m_hexInput.setBounds(popup + HexInputOffset, HexInputSize);
 }
 

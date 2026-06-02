@@ -22,6 +22,7 @@ public:
     void update(UIContext& context, const TextRenderer& textRenderer, const UIStyle& style, std::string_view fontName = "default", float scale = 1.0f);
     void render(Renderer2D& renderer2D, const UIStyle& style) const override;
     void render(const UIFrame& frame) const;
+    void renderTextOnly(const UIFrame& frame) const;
 
     void setValue(float value);
     void setRange(float minValue, float maxValue);
