@@ -100,6 +100,44 @@ void VulkanRenderer2D::drawQuad(const glm::vec2& position, const glm::vec2& size
     m_quadBatches.back().count += static_cast<std::uint32_t>(VerticesPerQuad);
 }
 
+void VulkanRenderer2D::drawGradientQuad(
+    const glm::vec2& position,
+    const glm::vec2& size,
+    const glm::vec4& topLeft,
+    const glm::vec4& topRight,
+    const glm::vec4& bottomRight,
+    const glm::vec4& bottomLeft)
+{
+    if (size.x <= 0.0f || size.y <= 0.0f){
+        return;
+    }
+
+    if (m_vertices.size() + VerticesPerQuad > m_maxQuads * VerticesPerQuad) {
+        return;
+    }
+
+    const glm::vec2 p0 = toNdc(position);
+    const glm::vec2 p1 = toNdc({position.x + size.x, position.y});
+    const glm::vec2 p2 = toNdc({position.x + size.x, position.y + size.y});
+    const glm::vec2 p3 = toNdc({position.x, position.y + size.y});
+
+    const UIClipRect clipRect = currentClipRect();
+
+    if (m_quadBatches.empty() || !sameClipRect(m_quadBatches.back().clipRect, clipRect)) {
+        m_quadBatches.push_back({clipRect, static_cast<std::uint32_t>(m_vertices.size()), 0});
+    }
+
+    m_vertices.push_back({p0, topLeft});
+    m_vertices.push_back({p1, topRight});
+    m_vertices.push_back({p2, bottomRight});
+
+    m_vertices.push_back({p2, bottomRight});
+    m_vertices.push_back({p3, bottomLeft});
+    m_vertices.push_back({p0, topLeft});
+
+    m_quadBatches.back().count += static_cast<std::uint32_t>(VerticesPerQuad);
+}
+
 void VulkanRenderer2D::drawRect(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color, const float thickness)
 {
     if (size.x <= 0.0f || size.y <= 0.0f) {

@@ -20,7 +20,7 @@ namespace Engine {
 namespace {
 
 constexpr float ButtonHeight = 28.0f;
-constexpr glm::vec2 PopupSize{228.0f, 310.0f};
+constexpr glm::vec2 PopupSize{228.0f, 340.0f};
 constexpr glm::vec2 SaturationValueOffset{12.0f, 12.0f};
 constexpr glm::vec2 SaturationValueSize{174.0f, 150.0f};
 constexpr glm::vec2 HueOffset{194.0f, 12.0f};
@@ -30,13 +30,11 @@ constexpr glm::vec2 CurrentPreviewOffset{116.0f, 176.0f};
 constexpr glm::vec2 PreviewSize{100.0f, 18.0f};
 constexpr float ChannelTrackY = 204.0f;
 constexpr float ChannelTrackHeight = 14.0f;
-constexpr float ChannelTrackSpacing = 20.0f;
+constexpr float ChannelTrackSpacing = 34.0f;
 constexpr float ChannelTrackWidth = 204.0f;
-constexpr glm::vec2 HexInputOffset{12.0f, 276.0f};
-constexpr glm::vec2 HexInputSize{204.0f, 22.0f};
-constexpr int SaturationValueSteps = 24;
-constexpr int HueSteps = 24;
-constexpr int ChannelGradientSteps = 24;
+constexpr glm::vec2 HexInputOffset{12.0f, 306.0f};
+constexpr glm::vec2 HexInputSize{204.0f, 24.0f};
+constexpr int HueGradientSegments = 6;
 
 glm::vec4 hsvToRgb(const float hue, const float saturation, const float value)
 {
@@ -91,20 +89,43 @@ bool parseHexColor(const std::string_view text, glm::vec4& color)
 
 ColorPicker::ColorPicker(std::string id, const glm::vec4& color)
     : Widget(std::move(id))
-    , m_redInput(m_id + ".red-input", color.r * 255.0f, 0.0f, 255.0f)
-    , m_greenInput(m_id + ".green-input", color.g * 255.0f, 0.0f, 255.0f)
-    , m_blueInput(m_id + ".blue-input", color.b * 255.0f, 0.0f, 255.0f)
+    , m_redSlider(m_id + ".red-slider", color.r * 255.0f, 0.0f, 255.0f)
+    , m_greenSlider(m_id + ".green-slider", color.g * 255.0f, 0.0f, 255.0f)
+    , m_blueSlider(m_id + ".blue-slider", color.b * 255.0f, 0.0f, 255.0f)
     , m_hexInput(m_id + ".hex-input", colorToHex(color))
 {
-    m_redInput.setPrecision(0);
-    m_greenInput.setPrecision(0);
-    m_blueInput.setPrecision(0);
-    m_redInput.setSensitivity(255.0f / ChannelTrackWidth);
-    m_greenInput.setSensitivity(255.0f / ChannelTrackWidth);
-    m_blueInput.setSensitivity(255.0f / ChannelTrackWidth);
-    m_redInput.setOnValueChanged([this](const float value) { if (!m_syncingInputs) { m_color.r = value / 255.0f; updateHsvFromColor(); syncHexInput(); notifyColorChanged(); } });
-    m_greenInput.setOnValueChanged([this](const float value) { if (!m_syncingInputs) { m_color.g = value / 255.0f; updateHsvFromColor(); syncHexInput(); notifyColorChanged(); } });
-    m_blueInput.setOnValueChanged([this](const float value) { if (!m_syncingInputs) { m_color.b = value / 255.0f; updateHsvFromColor(); syncHexInput(); notifyColorChanged(); } });
+    m_redSlider.setStyleClass("color-red");
+    m_greenSlider.setStyleClass("color-green");
+    m_blueSlider.setStyleClass("color-blue");
+    m_redSlider.setPrecision(0);
+    m_greenSlider.setPrecision(0);
+    m_blueSlider.setPrecision(0);
+    m_redSlider.setOnValueChanged([this](const float value) {
+    if (!m_syncingInputs) {
+        m_color.r = std::clamp(value / 255.0f, 0.0f, 1.0f);
+        updateHsvFromColor();
+        syncHexInput();
+        notifyColorChanged();
+    }
+    });
+
+    m_greenSlider.setOnValueChanged([this](const float value) {
+        if (!m_syncingInputs) {
+            m_color.g = std::clamp(value / 255.0f, 0.0f, 1.0f);
+            updateHsvFromColor();
+            syncHexInput();
+            notifyColorChanged();
+        }
+    });
+
+    m_blueSlider.setOnValueChanged([this](const float value) {
+        if (!m_syncingInputs) {
+            m_color.b = std::clamp(value / 255.0f, 0.0f, 1.0f);
+            updateHsvFromColor();
+            syncHexInput();
+            notifyColorChanged();
+        }
+    });
     m_hexInput.setOnValueChanged([this](const std::string_view value) {
         glm::vec4 color = m_color;
         if (parseHexColor(value, color)) {
@@ -135,7 +156,7 @@ void ColorPicker::updatePopup(UIContext& context)
 
     const glm::vec2 popup = popupPosition();
     if (context.primaryMousePressed() &&
-        !contains(context.mousePosition(), m_position, {m_size.x, ButtonHeight}) &&
+        !contains(context.mousePosition(), m_position, m_size) &&
         !contains(context.mousePosition(), popup, PopupSize)) {
         m_popupOpen = false;
         return;
@@ -146,9 +167,6 @@ void ColorPicker::updatePopup(UIContext& context)
     if (context.interact(m_id + ".old-preview", popup + OldPreviewOffset, PreviewSize).pressed) {
         setColor(m_originalColor);
     }
-    updateChannel(context, ".red", ChannelTrackY, m_color.r);
-    updateChannel(context, ".green", ChannelTrackY + ChannelTrackSpacing, m_color.g);
-    updateChannel(context, ".blue", ChannelTrackY + ChannelTrackSpacing * 2.0f, m_color.b);
 }
 
 void ColorPicker::updatePopup(UIContext& context, const TextRenderer& textRenderer, const UIStyle& style)
@@ -157,21 +175,32 @@ void ColorPicker::updatePopup(UIContext& context, const TextRenderer& textRender
     if (!m_visible || !m_popupOpen) return;
     layoutChannelInputs();
     const UITextStyle& textStyle = style.resolveText("input-value");
-    m_redInput.update(context, textRenderer, style, textStyle.font, textStyle.scale);
-    m_greenInput.update(context, textRenderer, style, textStyle.font, textStyle.scale);
-    m_blueInput.update(context, textRenderer, style, textStyle.font, textStyle.scale);
+    m_redSlider.update(context, textRenderer, style, textStyle.font, textStyle.scale);
+    m_greenSlider.update(context, textRenderer, style, textStyle.font, textStyle.scale);
+    m_blueSlider.update(context, textRenderer, style, textStyle.font, textStyle.scale); 
     m_hexInput.update(context, textRenderer, style, textStyle.font, textStyle.scale);
 }
 
 void ColorPicker::render(Renderer2D& renderer2D, const UIStyle& style) const
 {
-    if (!m_visible) return;
+    if (!m_visible) {
+        return;
+    }
 
-    const glm::vec4 border = style.field.border;
-    renderer2D.drawSdfRect(m_position, {m_size.x, ButtonHeight}, 4.0f, style.field.fill, border, 1.0f);
-    const glm::vec2 swatchPosition = m_position + glm::vec2{4.0f};
-    const glm::vec2 swatchSize{std::max(m_size.x - 8.0f, 0.0f), ButtonHeight - 8.0f};
-    renderer2D.drawSdfRect(swatchPosition, swatchSize, 3.0f, m_color, border, 1.0f);
+    glm::vec4 swatchColor = m_color;
+    swatchColor.a = 1.0f; // important, in case clear color alpha is 0
+
+    const glm::vec4 border = m_interaction.hovered
+        ? glm::vec4{0.62f, 0.78f, 1.0f, 1.0f}
+        : style.field.border;
+
+    renderer2D.drawSdfRect(
+        m_position,
+        m_size,
+        4.0f,
+        swatchColor, // fill color
+        border,      // border color
+        1.0f);
 }
 
 void ColorPicker::renderPopup(UIContext& context, Renderer2D& renderer2D, TextRenderer& textRenderer, const UIStyle& style) const
@@ -185,22 +214,48 @@ void ColorPicker::renderPopup(UIContext& context, Renderer2D& renderer2D, TextRe
     renderer2D.drawRect(popup, PopupSize, style.panel.border, 1.0f);
 
     const glm::vec2 svPosition = popup + SaturationValueOffset;
-    const glm::vec2 cellSize = SaturationValueSize / static_cast<float>(SaturationValueSteps);
-    for (int y = 0; y < SaturationValueSteps; ++y) {
-        const float value = 1.0f - static_cast<float>(y) / static_cast<float>(SaturationValueSteps - 1);
-        for (int x = 0; x < SaturationValueSteps; ++x) {
-            const float saturation = static_cast<float>(x) / static_cast<float>(SaturationValueSteps - 1);
-            renderer2D.drawQuad(svPosition + glm::vec2{cellSize.x * x, cellSize.y * y}, cellSize + glm::vec2{0.5f}, hsvToRgb(m_hue, saturation, value));
-        }
+    const glm::vec4 hueColor = hsvToRgb(m_hue, 1.0f, 1.0f);
+
+    // Horizontal gradient: white -> selected hue.
+    renderer2D.drawGradientQuad(
+        svPosition,
+        SaturationValueSize,
+        {1.0f, 1.0f, 1.0f, 1.0f},
+        hueColor,
+        hueColor,
+        {1.0f, 1.0f, 1.0f, 1.0f});
+
+    // Vertical black overlay: transparent top -> black bottom.
+    renderer2D.drawGradientQuad(
+        svPosition,
+        SaturationValueSize,
+        {0.0f, 0.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 0.0f, 1.0f},
+        {0.0f, 0.0f, 0.0f, 1.0f});
+
+    renderer2D.drawRect(svPosition, SaturationValueSize, style.field.border, 1.0f);
+
+    for (int index = 0; index < HueGradientSegments; ++index) {
+        const float t0 = static_cast<float>(index) / static_cast<float>(HueGradientSegments);
+        const float t1 = static_cast<float>(index + 1) / static_cast<float>(HueGradientSegments);
+
+        const glm::vec4 c0 = hsvToRgb(t0, 1.0f, 1.0f);
+        const glm::vec4 c1 = hsvToRgb(t1, 1.0f, 1.0f);
+
+        const float y0 = HueSize.y * t0;
+        const float y1 = HueSize.y * t1;
+
+        renderer2D.drawGradientQuad(
+            popup + HueOffset + glm::vec2{0.0f, y0},
+            {HueSize.x, y1 - y0},
+            c0,
+            c0,
+            c1,
+            c1);
     }
 
-    const float hueCellHeight = HueSize.y / static_cast<float>(HueSteps);
-    for (int index = 0; index < HueSteps; ++index) {
-        renderer2D.drawQuad(
-            popup + HueOffset + glm::vec2{0.0f, hueCellHeight * index},
-            {HueSize.x, hueCellHeight + 0.5f},
-            hsvToRgb(static_cast<float>(index) / static_cast<float>(HueSteps), 1.0f, 1.0f));
-    }
+    renderer2D.drawRect(popup + HueOffset, HueSize, style.field.border, 1.0f);
 
     renderer2D.drawRect(
         svPosition + glm::vec2{m_saturation * SaturationValueSize.x - 4.0f, (1.0f - m_value) * SaturationValueSize.y - 4.0f},
@@ -217,22 +272,10 @@ void ColorPicker::renderPopup(UIContext& context, Renderer2D& renderer2D, TextRe
     renderer2D.drawQuad(popup + CurrentPreviewOffset, PreviewSize, m_color);
     renderer2D.drawRect(popup + CurrentPreviewOffset, PreviewSize, style.field.border, 1.0f);
 
-    const float values[] = {m_color.r, m_color.g, m_color.b};
-    for (int index = 0; index < 3; ++index) {
-        const glm::vec2 trackPosition = popup + glm::vec2{12.0f, ChannelTrackY + ChannelTrackSpacing * index};
-        const float segmentWidth = ChannelTrackWidth / static_cast<float>(ChannelGradientSteps);
-        for (int step = 0; step < ChannelGradientSteps; ++step) {
-            glm::vec4 segmentColor = m_color;
-            segmentColor[index] = static_cast<float>(step) / static_cast<float>(ChannelGradientSteps - 1);
-            renderer2D.drawQuad(trackPosition + glm::vec2{segmentWidth * step, 0.0f}, {segmentWidth + 0.5f, ChannelTrackHeight}, segmentColor);
-        }
-        renderer2D.drawRect(trackPosition, {ChannelTrackWidth, ChannelTrackHeight}, style.field.border, 1.0f);
-        renderer2D.drawRect(trackPosition + glm::vec2{ChannelTrackWidth * values[index] - 2.0f, -2.0f}, {4.0f, ChannelTrackHeight + 4.0f}, glm::vec4{1.0f}, 1.0f);
-    }
     UIFrame frame{context, renderer2D, textRenderer, style};
-    m_redInput.renderTextOnly(frame);
-    m_greenInput.renderTextOnly(frame);
-    m_blueInput.renderTextOnly(frame);
+    m_redSlider.render(frame);
+    m_greenSlider.render(frame);
+    m_blueSlider.render(frame);
     m_hexInput.render(frame);
 }
 
@@ -299,18 +342,28 @@ void ColorPicker::updateChannel(UIContext& context, const std::string_view suffi
 void ColorPicker::layoutChannelInputs()
 {
     const glm::vec2 popup = popupPosition();
-    m_redInput.setBounds(popup + glm::vec2{12.0f, ChannelTrackY - 4.0f}, {ChannelTrackWidth, 22.0f});
-    m_greenInput.setBounds(popup + glm::vec2{12.0f, ChannelTrackY + ChannelTrackSpacing - 4.0f}, {ChannelTrackWidth, 22.0f});
-    m_blueInput.setBounds(popup + glm::vec2{12.0f, ChannelTrackY + ChannelTrackSpacing * 2.0f - 4.0f}, {ChannelTrackWidth, 22.0f});
+
+    m_redSlider.setBounds(
+        popup + glm::vec2{12.0f, ChannelTrackY},
+        {ChannelTrackWidth, 24.0f});
+
+    m_greenSlider.setBounds(
+        popup + glm::vec2{12.0f, ChannelTrackY + ChannelTrackSpacing},
+        {ChannelTrackWidth, 24.0f});
+
+    m_blueSlider.setBounds(
+        popup + glm::vec2{12.0f, ChannelTrackY + ChannelTrackSpacing * 2.0f},
+        {ChannelTrackWidth, 24.0f});
+
     m_hexInput.setBounds(popup + HexInputOffset, HexInputSize);
 }
 
 void ColorPicker::syncChannelInputs()
 {
     m_syncingInputs = true;
-    m_redInput.setValue(m_color.r * 255.0f);
-    m_greenInput.setValue(m_color.g * 255.0f);
-    m_blueInput.setValue(m_color.b * 255.0f);
+    m_redSlider.setValue(m_color.r * 255.0f);
+    m_greenSlider.setValue(m_color.g * 255.0f);
+    m_blueSlider.setValue(m_color.b * 255.0f);
     m_syncingInputs = false;
     syncHexInput();
 }

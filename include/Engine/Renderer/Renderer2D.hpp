@@ -20,6 +20,17 @@ public:
 
     virtual void begin(const glm::uvec2& viewportSize) = 0;
     virtual void drawQuad(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color) = 0;
+    virtual void drawGradientQuad(
+        const glm::vec2& position,
+        const glm::vec2& size,
+        const glm::vec4& topLeft,
+        const glm::vec4& topRight,
+        const glm::vec4& bottomRight,
+        const glm::vec4& bottomLeft)
+    {
+        // Fallback for simple/headless backends.
+        drawQuad(position, size, (topLeft + topRight + bottomRight + bottomLeft) * 0.25f);
+    }
     virtual void drawRect(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color, float thickness = 1.0f) = 0;
     virtual void drawSdfRect(
         const glm::vec2& position,

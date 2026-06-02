@@ -43,6 +43,13 @@ public:
 
     void begin(const glm::uvec2& viewportSize) override;
     void drawQuad(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color) override;
+    void drawGradientQuad(
+    const glm::vec2& position,
+    const glm::vec2& size,
+    const glm::vec4& topLeft,
+    const glm::vec4& topRight,
+    const glm::vec4& bottomRight,
+    const glm::vec4& bottomLeft) override;
     void drawRect(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color, float thickness = 1.0f) override;
     void drawSdfRect(
         const glm::vec2& position,

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Engine/UI/NumberInput.hpp"
+#include "Engine/UI/Slider.hpp"
 #include "Engine/UI/TextInput.hpp"
 #include "Engine/UI/Widget.hpp"
 
@@ -45,9 +45,9 @@ private:
     float m_saturation{0.0f};
     float m_value{1.0f};
     bool m_popupOpen{false};
-    NumberInput m_redInput;
-    NumberInput m_greenInput;
-    NumberInput m_blueInput;
+    Slider m_redSlider;
+    Slider m_greenSlider;
+    Slider m_blueSlider;
     TextInput m_hexInput;
     bool m_syncingInputs{false};
     std::function<void(const glm::vec4&)> m_onColorChanged;
