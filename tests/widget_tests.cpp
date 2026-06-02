@@ -25,9 +25,18 @@ int main()
 
     Engine::ColorPicker picker{"clear-color", {2.0f, -1.0f, 0.5f, 1.0f}};
     assert(picker.color() == glm::vec4(1.0f, 0.0f, 0.5f, 1.0f));
-    picker.setBounds({10.0f, 20.0f}, {140.0f, 60.0f});
+    picker.setBounds({300.0f, 20.0f}, {140.0f, 28.0f});
     Engine::UIContext context;
-    context.beginFrame({.mousePosition = {80.0f, 22.0f}, .primaryMouseDown = true});
+    context.beginFrame({.mousePosition = {320.0f, 30.0f}, .primaryMouseDown = true});
     picker.update(context);
-    assert(picker.color().r == 0.3f);
+    context.endFrame();
+    context.beginFrame({.mousePosition = {320.0f, 30.0f}, .primaryMouseDown = false});
+    picker.update(context);
+    assert(picker.popupOpen());
+    context.endFrame();
+
+    context.beginFrame({.mousePosition = {163.0f, 66.0f}, .primaryMouseDown = true});
+    picker.updatePopup(context);
+    assert(picker.color().g > 0.45f);
+    assert(picker.color().b > 0.45f);
 }
