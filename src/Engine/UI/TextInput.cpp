@@ -3,6 +3,7 @@
 #include "Engine/Renderer/Renderer2D.hpp"
 #include "Engine/Renderer/TextRenderer.hpp"
 #include "Engine/UI/UIStyle.hpp"
+#include "Engine/UI/UIFrame.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -254,6 +255,76 @@ void TextInput::render(Renderer2D& renderer2D, const UIStyle& style) const
             inputStyle.scrollbarThumb,
             0.0f);
     }
+}
+
+void TextInput::render(const UIFrame& frame) const
+{
+    if (!m_visible) return;
+    const UITextInputStyle& inputStyle = m_styleOverride ? *m_styleOverride : frame.style().resolveTextInput(m_styleClass, m_id);
+    const glm::vec4 fill = m_focused ? inputStyle.focused : m_interaction.hovered ? inputStyle.hovered : inputStyle.box.fill;
+    frame.shapes().drawSdfRect(frame.toScreen(m_position), m_size, inputStyle.box.borderRadius, fill, m_focused ? inputStyle.focusedBorder : inputStyle.box.border, inputStyle.box.borderWidth);
+    renderText(frame.text(), frame.style(), "default", 1.0f, frame.surface().origin);
+}
+
+void TextInput::renderText(
+    TextRenderer& textRenderer,
+    const UIStyle& style,
+    const std::string_view fontName,
+    const float scale,
+    const glm::vec2& origin) const
+{
+    if (!m_visible || scale <= 0.0f) {
+        return;
+    }
+
+    const UITextInputStyle& inputStyle = m_styleOverride ? *m_styleOverride : style.resolveTextInput(m_styleClass, m_id);
+    const UIClipRect clipRect{
+        origin + m_position + glm::vec2{inputStyle.box.padding.x, 2.0f},
+        {
+            std::max(m_size.x - inputStyle.box.padding.x * 2.0f, 0.0f),
+            std::max(m_size.y - 6.0f, 0.0f),
+        },
+    };
+    const float textX = origin.x + m_position.x + inputStyle.box.padding.x - m_horizontalScrollOffset;
+    const std::string_view text = m_value.empty()
+        ? std::string_view{m_placeholder}
+        : std::string_view{m_value};
+    const glm::vec2 textSize = textRenderer.measureText(text, fontName, scale);
+    const glm::vec2 textPosition{textX, origin.y + m_position.y + (m_size.y - textSize.y) * 0.5f};
+
+    textRenderer.pushClipRect(clipRect);
+    textRenderer.drawText(text, textPosition, m_value.empty() ? inputStyle.placeholder : inputStyle.text, fontName, scale);
+    textRenderer.popClipRect();
+    if (!m_focused) {
+        return;
+    }
+
+    if (hasSelection()) {
+        const std::string_view selectedPrefix{m_value.data(), selectionStart()};
+        const std::string_view selectedText{
+            m_value.data() + selectionStart(),
+            selectionEnd() - selectionStart(),
+        };
+        const float selectionX = textX + textRenderer.measureText(selectedPrefix, fontName, scale).x;
+        const float selectionWidth = textRenderer.measureText(selectedText, fontName, scale).x;
+        textRenderer.pushClipRect(clipRect);
+        textRenderer.drawSolidRect(
+            {selectionX, origin.y + m_position.y + 4.0f},
+            {selectionWidth, m_size.y - 8.0f},
+            inputStyle.selection,
+            fontName);
+        textRenderer.popClipRect();
+    }
+
+    const std::string_view prefix{m_value.data(), m_caretIndex};
+    const float caretX = textX + textRenderer.measureText(prefix, fontName, scale).x;
+    textRenderer.pushClipRect(clipRect);
+    textRenderer.drawSolidRect(
+        {caretX, origin.y + m_position.y + 5.0f},
+        {1.0f, m_size.y - 10.0f},
+        inputStyle.caret,
+        fontName);
+    textRenderer.popClipRect();
 }
 
 void TextInput::setValue(std::string value)

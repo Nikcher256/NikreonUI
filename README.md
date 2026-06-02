@@ -1,159 +1,90 @@
 # NikreonUI
 
-Reusable native GPU UI and text rendering library extracted from Nikreon Engine.
+NikreonUI is a reusable retained UI library for native tools and game HUDs. It
+contains backend-neutral widgets in `NikreonUI::Core` and an optional Vulkan
+renderer in `NikreonUI::Vulkan`. It deliberately does not contain game-world
+sprite, tilemap, particle, or camera rendering.
 
-Current features:
+## Targets
 
-- Retained buttons, checkboxes, sliders, scrub-style number inputs, and text inputs
-- Nested clip rectangles and wheel-driven scroll containers with draggable thumbs
-- Row, column, dock, stack, padding, gap, alignment, and anchor layouts
-- CSS-like style parsing with widget and text classes
-- CSS-like `type`, `type.class`, `type#id`, and `type.class#id` selectors
-- Batched Vulkan quads and SDF rounded rectangles
-- FreeType growing font atlas generation and batched UTF-8 Vulkan glyph rendering
+| Target | Contents |
+| --- | --- |
+| `NikreonUI::Core` | Widgets, layout, input, styles, surfaces, clipping |
+| `NikreonUI::Vulkan` | Vulkan quad, SDF shape, and FreeType text renderers |
+| `NikreonUI::NikreonUI` | Compatibility alias for `NikreonUI::Vulkan` |
 
-The library intentionally does not own an application window, swapchain, or editor panels. Consumers provide input snapshots and Vulkan frame resources.
+Configure with `-DNIKREON_UI_BUILD_VULKAN=OFF` to use another renderer backend.
+Implement `Renderer2D` and `TextRenderer`, then pass them into a `UIFrame`.
 
-ID selectors override reusable class selectors. For example:
+## Surface And Frame
+
+`UISurface` gives each UI tree its own local coordinate space. `UIFrame`
+carries the surface, resolved style, shape renderer, text renderer, input
+context, and synchronized clipping.
+
+```cpp
+UIContext input;
+UIStyle style;
+UISurface hud{{24.0f, 24.0f}, {320.0f, 180.0f}};
+UIFrame frame{input, shapes, text, style, hud};
+
+Label title{"hud.title", "Mission"};
+title.setBounds({12.0f, 12.0f}, {180.0f, 24.0f});
+title.setStyleClass("heading");
+title.render(frame);
+```
+
+## Widgets
+
+The core target provides:
+
+- `Button`, `Checkbox`, `Slider`, `NumberInput`, and `TextInput`
+- `Label`, `Panel`, textured `Image`/`Icon`, `NineSlicePanel`, and `ProgressBar`
+- `ScrollContainer` with clipping, child ownership, content offsets, wheel
+  scrolling, draggable thumbs, and theme-owned scrollbar styling
+- Linear, dock, stack, anchor, padding, gap, and alignment layouts
+
+Composite controls own their editing details. Render `Slider`, `NumberInput`,
+and `TextInput` with `render(frame)` to draw shape, value text, selection, and
+caret without reaching into nested controls.
+
+```cpp
+Slider volume{"hud.volume", 0.8f};
+volume.setBounds({12.0f, 52.0f}, {180.0f, 20.0f});
+volume.update(input, text, style);
+volume.render(frame);
+```
+
+## Styling
+
+`UIStyleParser` supports a deliberately small CSS-like format with
+`type`, `type.class`, `type#id`, and `type.class#id` selectors. ID rules override
+class rules. Shared theme data is application-neutral; editor panel sizing,
+viewport colors, and toolbar configuration belong in the editor.
 
 ```css
-button.toolbar {
-    border-radius: 10;
+slider.hud {
+    fill: 0.12, 0.14, 0.18, 1;
+    accent: 0.36, 0.58, 0.82, 1;
 }
 
-button.toolbar#toolbar.stop {
-    selected-fill: 0.64, 0.28, 0.32, 1.0;
+text.heading {
+    color: 0.92, 0.98, 1, 1;
+    font-scale: 1.1;
 }
 ```
 
-## Stylesheet Reference
+Text inputs support focus, UTF-8 insertion, caret movement, selection,
+clipboard shortcuts, and horizontal overflow scrolling. Stylesheets can set
+their text, placeholder, selection, caret, and scrollbar colors.
 
-Stylesheets use a deliberately small CSS-like syntax. Each declaration ends
-with `;`. Colors are normalized RGBA values, vectors are comma-separated
-numbers, and scalar sizes are pixel values.
+## Sample And Tests
 
-Supported selector forms:
+`NikreonUISample` is a standalone Core-only sample. `NikreonUIWidgetTests`
+contains focused widget and scrolling checks.
 
-| Form | Example |
-| --- | --- |
-| Global UI settings | `ui` |
-| Shared box style | `toolbar`, `panel`, `field` |
-| Widget or text type | `button`, `checkbox`, `slider`, `number-input`, `text-input`, `text` |
-| Type with reusable class | `button.toolbar`, `text.muted` |
-| Type with unique ID | `button#toolbar.stop` |
-| Type with class and ID | `button.toolbar#toolbar.stop` |
-
-ID styles override class styles. A `type.class#id` rule starts with the
-resolved class style and then applies its ID-specific declarations.
-
-### Value Formats
-
-| Format | Example |
-| --- | --- |
-| Scalar number | `border-width: 1;` |
-| Two-component vector | `padding: 8, 5;` |
-| RGBA color | `fill: 0.13, 0.145, 0.18, 1.0;` |
-| Name | `font: default;` |
-
-### `ui`
-
-| Property | Value |
-| --- | --- |
-| `spacing` | Scalar gap size |
-| `toolbar-height-min` | Scalar minimum toolbar height |
-| `toolbar-height-max` | Scalar maximum toolbar height |
-
-### `toolbar`, `panel`, `field`
-
-| Property | Value |
-| --- | --- |
-| `fill` | RGBA color |
-| `border-color` | RGBA color |
-| `border-width` | Scalar width |
-| `border-radius` | Scalar radius |
-| `padding` | Horizontal, vertical vector |
-
-### `button`
-
-Buttons support all shared box properties plus:
-
-| Property | Value |
-| --- | --- |
-| `hover-fill` | RGBA color |
-| `pressed-fill` | RGBA color |
-| `selected-fill` | RGBA color |
-| `selected-border-color` | RGBA color |
-| `icon-color` | RGBA color |
-| `selected-icon-color` | RGBA color |
-| `accent` | RGBA color |
-
-### `checkbox`
-
-Checkboxes support all shared box properties plus:
-
-| Property | Value |
-| --- | --- |
-| `hover-fill` | RGBA color |
-| `accent` | RGBA checked-mark color |
-
-### `slider`
-
-Sliders support drag-to-change and click-to-edit keyboard entry through a
-composed `TextInput`, plus all shared box properties:
-
-| Property | Value |
-| --- | --- |
-| `hover-fill` | RGBA color |
-| `accent` | RGBA filled-track color |
-| `knob-color` | RGBA knob color |
-
-### `number-input`
-
-Number inputs support horizontal mouse-drag scrubbing, click-to-edit keyboard
-entry through a composed `TextInput`, clipboard shortcuts, a value-proportional
-filled background that can be disabled for coordinate-style fields, and all
-shared box properties plus:
-
-| Property | Value |
-| --- | --- |
-| `hover-fill` | RGBA color |
-| `accent` | RGBA filled-value color |
-| `show-value-fill` | `true` or `false` |
-
-### `text-input`
-
-Text inputs support focus, UTF-8 insertion, caret movement on UTF-8 boundaries,
-click-to-position, mouse-drag and shift-selection, Ctrl+A/C/V clipboard
-shortcuts, automatic and thumb-draggable horizontal scrolling for overflow,
-delete, backspace, home, end, enter-to-commit, and escape-to-blur. Pointer
-selection and overflow scrolling use the
-`TextRenderer`-aware `update` overload. Text inputs support all shared box
-properties plus:
-
-| Property | Value |
-| --- | --- |
-| `hover-fill` | RGBA color |
-| `focused-fill` | RGBA color |
-| `focused-border-color` | RGBA color |
-| `scrollbar-track-color` | RGBA horizontal overflow track color |
-| `scrollbar-thumb-color` | RGBA horizontal overflow thumb color |
-
-### `text`
-
-| Property | Value |
-| --- | --- |
-| `color` | RGBA color |
-| `font` | Loaded font name |
-| `font-scale` | Scalar multiplier |
-| `opacity` | Scalar alpha multiplier |
-| `offset` | X, Y vector |
-| `text-align` | `left`, `center`, or `right` |
-| `vertical-align` | `top`, `center`, or `bottom` |
-
-Text alignment is resolved inside the consumer-provided text rectangle.
-`offset` is applied after alignment.
-
-`TextRenderer::drawText` and `measureText` also accept `TextLayout` options for
-line spacing, maximum width, and basic wrapping.
-`TextRenderer::drawSolidRect` emits clipped post-text overlays such as carets
-without making UI code depend on a renderer backend.
+```sh
+cmake -S . -B build -DNIKREON_UI_BUILD_VULKAN=OFF
+cmake --build build
+ctest --test-dir build
+```

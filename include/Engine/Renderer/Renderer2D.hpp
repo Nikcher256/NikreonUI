@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
 
@@ -9,6 +11,8 @@ struct UIClipRect {
     glm::vec2 position{0.0f, 0.0f};
     glm::vec2 size{0.0f, 0.0f};
 };
+
+using UITextureId = std::uintptr_t;
 
 class Renderer2D {
 public:
@@ -24,6 +28,19 @@ public:
         const glm::vec4& fillColor,
         const glm::vec4& borderColor,
         float borderWidth = 0.0f) = 0;
+    virtual void drawImage(
+        UITextureId texture,
+        const glm::vec2& position,
+        const glm::vec2& size,
+        const glm::vec2& uvMinimum = {0.0f, 0.0f},
+        const glm::vec2& uvMaximum = {1.0f, 1.0f},
+        const glm::vec4& tint = {1.0f, 1.0f, 1.0f, 1.0f})
+    {
+        (void)texture;
+        (void)uvMinimum;
+        (void)uvMaximum;
+        drawQuad(position, size, tint);
+    }
     virtual void pushClipRect(const UIClipRect& clipRect) = 0;
     virtual void popClipRect() = 0;
     virtual void end() = 0;

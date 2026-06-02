@@ -363,6 +363,18 @@ bool applyTextInputProperty(UITextInputStyle& textInput, const std::string_view 
     if (property == "scrollbar-thumb-color") {
         return parseVec4(value, textInput.scrollbarThumb);
     }
+    if (property == "text-color") {
+        return parseVec4(value, textInput.text);
+    }
+    if (property == "placeholder-color") {
+        return parseVec4(value, textInput.placeholder);
+    }
+    if (property == "selection-color") {
+        return parseVec4(value, textInput.selection);
+    }
+    if (property == "caret-color") {
+        return parseVec4(value, textInput.caret);
+    }
 
     return false;
 }
@@ -424,13 +436,6 @@ bool applyGlobalProperty(UIStyle& style, const std::string_view property, const 
     if (property == "spacing") {
         return parseFloat(value, style.gap);
     }
-    if (property == "toolbar-height-min") {
-        return parseFloat(value, style.toolbarHeightMin);
-    }
-    if (property == "toolbar-height-max") {
-        return parseFloat(value, style.toolbarHeightMax);
-    }
-
     return false;
 }
 
@@ -438,9 +443,6 @@ bool applyProperty(UIStyle& style, const std::string_view selector, const std::s
 {
     if (selector == "ui") {
         return applyGlobalProperty(style, property, value);
-    }
-    if (selector == "toolbar") {
-        return applyBoxProperty(style.toolbar, property, value);
     }
     if (selector == "panel") {
         return applyBoxProperty(style.panel, property, value);

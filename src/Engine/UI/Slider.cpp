@@ -3,6 +3,7 @@
 #include "Engine/Renderer/Renderer2D.hpp"
 #include "Engine/Renderer/TextRenderer.hpp"
 #include "Engine/UI/UIStyle.hpp"
+#include "Engine/UI/UIFrame.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -128,6 +129,24 @@ void Slider::render(Renderer2D& renderer2D, const UIStyle& style) const
     renderer2D.drawSdfRect({knobX, m_position.y - 2.0f}, {knobWidth, m_size.y + 4.0f}, 4.0f, sliderStyle.knob, sliderStyle.knob, 0.0f);
 }
 
+void Slider::render(const UIFrame& frame) const
+{
+    if (!m_visible) return;
+    const UISliderStyle& sliderStyle = m_styleOverride ? *m_styleOverride : frame.style().resolveSlider(m_styleClass, m_id);
+    const float t = normalizedValue();
+    const glm::vec4 track = m_interaction.hovered || m_interaction.held ? sliderStyle.hovered : sliderStyle.track.fill;
+    frame.shapes().drawSdfRect(frame.toScreen(m_position), m_size, sliderStyle.track.borderRadius, track, sliderStyle.track.border, sliderStyle.track.borderWidth);
+    frame.shapes().drawSdfRect(frame.toScreen(m_position), {m_size.x * t, m_size.y}, sliderStyle.track.borderRadius, sliderStyle.fill, sliderStyle.fill, 0.0f);
+    constexpr float knobWidth = 8.0f;
+    frame.shapes().drawSdfRect(frame.toScreen({m_position.x + std::max(0.0f, m_size.x * t - knobWidth * 0.5f), m_position.y - 2.0f}), {knobWidth, m_size.y + 4.0f}, 4.0f, sliderStyle.knob, sliderStyle.knob, 0.0f);
+    if (m_editing) {
+        const UITextStyle& textStyle = frame.style().resolveText("input-value");
+        m_textEditor.renderText(frame.text(), frame.style(), textStyle.font, textStyle.scale, frame.surface().origin);
+    } else {
+        frame.drawText(formattedValue(), {m_position, m_size}, frame.style().resolveText("control-value"));
+    }
+}
+
 // Sets the slider value and fires the change callback when it meaningfully changes.
 void Slider::setValue(const float value)
 {
@@ -201,11 +220,6 @@ std::string Slider::formattedValue() const
 bool Slider::editing() const
 {
     return m_editing;
-}
-
-const TextInput& Slider::textEditor() const
-{
-    return m_textEditor;
 }
 
 } // namespace Engine

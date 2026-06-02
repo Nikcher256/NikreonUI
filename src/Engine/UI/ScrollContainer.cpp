@@ -2,6 +2,8 @@
 
 #include "Engine/Renderer/TextRenderer.hpp"
 #include "Engine/UI/UIContext.hpp"
+#include "Engine/UI/UIStyle.hpp"
+#include "Engine/UI/Widget.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -87,19 +89,53 @@ void ScrollContainer::popClip(TextRenderer& textRenderer) const
 
 void ScrollContainer::renderScrollbar(Renderer2D& renderer2D) const
 {
+    renderScrollbar(renderer2D, UIStyle{});
+}
+
+void ScrollContainer::renderScrollbar(Renderer2D& renderer2D, const UIStyle& style) const
+{
     if (maxOffset() <= 0.0f || m_bounds.size.y <= 0.0f) {
         return;
     }
 
-    const UIClipRect thumb = thumbBounds();
+    const UIClipRect thumb = thumbBounds(style.scrollbar.width, style.scrollbar.minimumThumbLength);
+    renderer2D.drawSdfRect(m_bounds.position + glm::vec2{m_bounds.size.x - style.scrollbar.width, 0.0f}, {style.scrollbar.width, m_bounds.size.y}, style.scrollbar.width * 0.5f, style.scrollbar.track, style.scrollbar.track, 0.0f);
     renderer2D.drawSdfRect(
         thumb.position,
         thumb.size,
         thumb.size.x * 0.5f,
-        {0.42f, 0.52f, 0.68f, 0.9f},
-        {0.42f, 0.52f, 0.68f, 0.9f},
+        style.scrollbar.thumb,
+        style.scrollbar.thumb,
         0.0f);
 }
+
+Widget& ScrollContainer::addChild(std::unique_ptr<Widget> child, const glm::vec2& contentPosition)
+{
+    Widget& result = *child;
+    m_children.push_back({std::move(child), contentPosition});
+    return result;
+}
+
+void ScrollContainer::clearChildren() { m_children.clear(); }
+
+void ScrollContainer::updateChildren(UIContext& context)
+{
+    pushClip(context);
+    for (Child& child : m_children) {
+        child.widget->setBounds(contentOrigin() + child.contentPosition, child.widget->size());
+        child.widget->update(context);
+    }
+    popClip(context);
+}
+
+void ScrollContainer::renderChildren(Renderer2D& renderer2D, const UIStyle& style)
+{
+    pushClip(renderer2D);
+    for (Child& child : m_children) child.widget->render(renderer2D, style);
+    popClip(renderer2D);
+}
+
+glm::vec2 ScrollContainer::contentOrigin() const { return m_bounds.position - glm::vec2{0.0f, m_offset}; }
 
 float ScrollContainer::offset() const
 {
@@ -118,9 +154,13 @@ void ScrollContainer::clampOffset()
 
 UIClipRect ScrollContainer::thumbBounds() const
 {
-    constexpr float width = 6.0f;
+    return thumbBounds(6.0f, 18.0f);
+}
+
+UIClipRect ScrollContainer::thumbBounds(const float width, const float minimumThumbLength) const
+{
     const float thumbHeight = maxOffset() > 0.0f && m_contentHeight > 0.0f
-        ? std::max(m_bounds.size.y * (m_bounds.size.y / m_contentHeight), 18.0f)
+        ? std::max(m_bounds.size.y * (m_bounds.size.y / m_contentHeight), minimumThumbLength)
         : m_bounds.size.y;
     const float travel = std::max(m_bounds.size.y - thumbHeight, 0.0f);
     const float thumbY = maxOffset() > 0.0f

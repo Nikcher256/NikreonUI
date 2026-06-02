@@ -85,6 +85,10 @@ struct UITextInputStyle {
     glm::vec4 focusedBorder{0.44f, 0.70f, 1.0f, 1.0f};
     glm::vec4 scrollbarTrack{0.10f, 0.12f, 0.16f, 1.0f};
     glm::vec4 scrollbarThumb{0.44f, 0.70f, 1.0f, 1.0f};
+    glm::vec4 text{0.86f, 0.92f, 1.0f, 1.0f};
+    glm::vec4 placeholder{0.48f, 0.55f, 0.66f, 1.0f};
+    glm::vec4 selection{0.30f, 0.58f, 0.96f, 0.58f};
+    glm::vec4 caret{0.92f, 0.98f, 1.0f, 1.0f};
 };
 
 enum class UITextHorizontalAlignment {
@@ -109,15 +113,20 @@ struct UITextStyle {
     UITextVerticalAlignment verticalAlignment{UITextVerticalAlignment::Top};
 };
 
+struct UIProgressBarStyle {
+    UIBoxStyle track;
+    glm::vec4 fill{0.30f, 0.62f, 0.95f, 1.0f};
+};
+
+struct UIScrollbarStyle {
+    glm::vec4 track{0.10f, 0.12f, 0.16f, 0.9f};
+    glm::vec4 thumb{0.42f, 0.52f, 0.68f, 0.9f};
+    float width{6.0f};
+    float minimumThumbLength{18.0f};
+};
+
 struct UIStyle {
     glm::vec4 windowBackground{0.07f, 0.075f, 0.09f, 1.0f};
-    UIBoxStyle toolbar{
-        {0.10f, 0.11f, 0.14f, 1.0f},
-        {0.20f, 0.23f, 0.29f, 1.0f},
-        0.0f,
-        0.0f,
-        {8.0f, 8.0f},
-    };
     UIBoxStyle panel{
         {0.095f, 0.105f, 0.13f, 1.0f},
         {0.20f, 0.23f, 0.29f, 1.0f},
@@ -138,6 +147,8 @@ struct UIStyle {
     UINumberInputStyle numberInput;
     UITextInputStyle textInput;
     UITextStyle text;
+    UIProgressBarStyle progressBar;
+    UIScrollbarStyle scrollbar;
     std::unordered_map<std::string, UIButtonStyle> buttonClasses;
     std::unordered_map<std::string, UICheckboxStyle> checkboxClasses;
     std::unordered_map<std::string, UISliderStyle> sliderClasses;
@@ -150,14 +161,7 @@ struct UIStyle {
     std::unordered_map<std::string, UINumberInputStyle> numberInputIds;
     std::unordered_map<std::string, UITextInputStyle> textInputIds;
     std::unordered_map<std::string, UITextStyle> textIds;
-    glm::vec4 hierarchySelected{0.20f, 0.32f, 0.48f, 1.0f};
-    glm::vec4 hierarchyHovered{0.17f, 0.19f, 0.24f, 1.0f};
-    glm::vec4 viewportGrid{0.10f, 0.13f, 0.17f, 0.8f};
-    glm::vec4 viewportBorder{0.25f, 0.32f, 0.42f, 1.0f};
-    glm::vec4 viewportFocusedBorder{0.32f, 0.58f, 0.88f, 1.0f};
     float gap{8.0f};
-    float toolbarHeightMin{42.0f};
-    float toolbarHeightMax{52.0f};
 
     [[nodiscard]] const UIButtonStyle& resolveButton(std::string_view styleClass, std::string_view id = {}) const
     {

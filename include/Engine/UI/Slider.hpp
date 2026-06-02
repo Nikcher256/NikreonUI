@@ -12,6 +12,7 @@
 namespace Engine {
 
 class TextRenderer;
+class UIFrame;
 
 class Slider final : public Widget {
 public:
@@ -20,6 +21,7 @@ public:
     void update(UIContext& context) override;
     void update(UIContext& context, const TextRenderer& textRenderer, const UIStyle& style, std::string_view fontName = "default", float scale = 1.0f);
     void render(Renderer2D& renderer2D, const UIStyle& style) const override;
+    void render(const UIFrame& frame) const;
 
     void setValue(float value);
     void setRange(float minValue, float maxValue);
@@ -32,7 +34,6 @@ public:
     [[nodiscard]] float normalizedValue() const;
     [[nodiscard]] std::string formattedValue() const;
     [[nodiscard]] bool editing() const;
-    [[nodiscard]] const TextInput& textEditor() const;
 
 private:
     void updateDragging(UIContext& context);

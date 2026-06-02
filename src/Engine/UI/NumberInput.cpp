@@ -3,6 +3,7 @@
 #include "Engine/Renderer/Renderer2D.hpp"
 #include "Engine/Renderer/TextRenderer.hpp"
 #include "Engine/UI/UIStyle.hpp"
+#include "Engine/UI/UIFrame.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -124,6 +125,21 @@ void NumberInput::render(Renderer2D& renderer2D, const UIStyle& style) const
     }
 }
 
+void NumberInput::render(const UIFrame& frame) const
+{
+    if (!m_visible) return;
+    const UINumberInputStyle& inputStyle = m_styleOverride ? *m_styleOverride : frame.style().resolveNumberInput(m_styleClass, m_id);
+    const glm::vec4 fill = m_interaction.hovered || m_interaction.held ? inputStyle.hovered : inputStyle.box.fill;
+    frame.shapes().drawSdfRect(frame.toScreen(m_position), m_size, inputStyle.box.borderRadius, fill, inputStyle.box.border, inputStyle.box.borderWidth);
+    if (inputStyle.showValueFill) frame.shapes().drawSdfRect(frame.toScreen(m_position), {m_size.x * normalizedValue(), m_size.y}, inputStyle.box.borderRadius, inputStyle.accent, inputStyle.accent, 0.0f);
+    if (m_editing) {
+        const UITextStyle& textStyle = frame.style().resolveText("input-value");
+        m_textEditor.renderText(frame.text(), frame.style(), textStyle.font, textStyle.scale, frame.surface().origin);
+    } else {
+        frame.drawText(formattedValue(), {m_position, m_size}, frame.style().resolveText("control-value"));
+    }
+}
+
 void NumberInput::setValue(const float value)
 {
     const float oldValue = m_value;
@@ -195,11 +211,6 @@ std::string NumberInput::formattedValue() const
 bool NumberInput::editing() const
 {
     return m_editing;
-}
-
-const TextInput& NumberInput::textEditor() const
-{
-    return m_textEditor;
 }
 
 } // namespace Engine
