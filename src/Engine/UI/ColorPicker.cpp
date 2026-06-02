@@ -31,7 +31,7 @@ constexpr glm::vec2 PreviewSize{100.0f, 18.0f};
 constexpr float ChannelTrackY = 204.0f;
 constexpr float ChannelTrackHeight = 14.0f;
 constexpr float ChannelTrackSpacing = 34.0f;
-constexpr float ChannelTrackWidth = 204.0f;
+constexpr float ChannelTrackWidth = 200.0f;
 constexpr glm::vec2 HexInputOffset{12.0f, 306.0f};
 constexpr glm::vec2 HexInputSize{204.0f, 24.0f};
 constexpr int HueGradientSegments = 6;

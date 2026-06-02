@@ -21,7 +21,13 @@ public:
     void update(UIContext& context, const TextRenderer& textRenderer, const UIStyle& style, std::string_view fontName = "default", float scale = 1.0f);
     void render(Renderer2D& renderer2D, const UIStyle& style) const override;
     void render(const UIFrame& frame) const;
-    void renderText(TextRenderer& textRenderer, const UIStyle& style, std::string_view fontName = "default", float scale = 1.0f, const glm::vec2& origin = {}) const;
+    void renderText(
+    TextRenderer& textRenderer,
+    const UIStyle& style,
+    std::string_view fontName = "default",
+    float scale = 1.0f,
+    const glm::vec2& origin = {},
+    const UITextStyle* textStyleOverride = nullptr) const;
 
     void setValue(std::string value);
     void setPlaceholder(std::string placeholder);

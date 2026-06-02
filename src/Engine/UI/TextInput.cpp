@@ -272,7 +272,8 @@ void TextInput::renderText(
     const UIStyle& style,
     const std::string_view fontName,
     const float scale,
-    const glm::vec2& origin) const
+    const glm::vec2& origin,
+    const UITextStyle* textStyleOverride) const
 {
     if (!m_visible || scale <= 0.0f) {
         return;
@@ -286,13 +287,35 @@ void TextInput::renderText(
             std::max(m_size.y - 2.0f, 0.0f),
         },
     };
-    const float textX = origin.x + m_position.x + inputStyle.box.padding.x - m_horizontalScrollOffset;
     const std::string_view text = m_value.empty()
         ? std::string_view{m_placeholder}
         : std::string_view{m_value};
-    const glm::vec2 textSize = textRenderer.measureText(text, fontName, scale);
-    const glm::vec2 textPosition{textX, origin.y + m_position.y + (m_size.y - textSize.y) * 0.5f};
 
+    const glm::vec2 textSize = textRenderer.measureText(text, fontName, scale);
+
+    const float contentLeft = origin.x + m_position.x + inputStyle.box.padding.x;
+    const float contentRight = origin.x + m_position.x + m_size.x - inputStyle.box.padding.x;
+    const float contentWidth = std::max(contentRight - contentLeft, 0.0f);
+
+    float textX = contentLeft - m_horizontalScrollOffset;
+
+    if (textStyleOverride != nullptr) {
+        if (textStyleOverride->horizontalAlignment == UITextHorizontalAlignment::Center) {
+            textX = contentLeft + (contentWidth - textSize.x) * 0.5f - m_horizontalScrollOffset;
+        } else if (textStyleOverride->horizontalAlignment == UITextHorizontalAlignment::Right) {
+            textX = contentRight - textSize.x - m_horizontalScrollOffset;
+        }
+
+        textX += textStyleOverride->offset.x;
+    }
+
+    float textY = origin.y + m_position.y + (m_size.y - textSize.y) * 0.5f;
+
+    if (textStyleOverride != nullptr) {
+        textY += textStyleOverride->offset.y;
+    }
+
+    const glm::vec2 textPosition{textX, textY};
     textRenderer.pushClipRect(clipRect);
     textRenderer.drawText(text, textPosition, m_value.empty() ? inputStyle.placeholder : inputStyle.text, fontName, scale);
     textRenderer.popClipRect();

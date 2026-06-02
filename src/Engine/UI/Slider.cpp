@@ -140,10 +140,19 @@ void Slider::render(const UIFrame& frame) const
     constexpr float knobWidth = 8.0f;
     frame.shapes().drawSdfRect(frame.toScreen({m_position.x + std::max(0.0f, m_size.x * t - knobWidth * 0.5f), m_position.y - 2.0f}), {knobWidth, m_size.y + 4.0f}, 4.0f, sliderStyle.knob, sliderStyle.knob, 0.0f);
     if (m_editing) {
-        const UITextStyle& textStyle = frame.style().resolveText("input-value");
-        m_textEditor.renderText(frame.text(), frame.style(), textStyle.font, textStyle.scale, frame.surface().origin);
+        const UITextStyle& textStyle = frame.style().resolveText("control-value");
+        m_textEditor.renderText(
+            frame.text(),
+            frame.style(),
+            textStyle.font,
+            textStyle.scale,
+            frame.surface().origin,
+            &textStyle);
     } else {
-        frame.drawText(formattedValue(), {m_position, m_size}, frame.style().resolveText("control-value"));
+        frame.drawText(
+            formattedValue(),
+            {m_position, m_size},
+            frame.style().resolveText("control-value"));
     }
 }
 

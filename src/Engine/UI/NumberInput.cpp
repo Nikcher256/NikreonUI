@@ -133,8 +133,14 @@ void NumberInput::render(const UIFrame& frame) const
     frame.shapes().drawSdfRect(frame.toScreen(m_position), m_size, inputStyle.box.borderRadius, fill, inputStyle.box.border, inputStyle.box.borderWidth);
     if (inputStyle.showValueFill) frame.shapes().drawSdfRect(frame.toScreen(m_position), {m_size.x * normalizedValue(), m_size.y}, inputStyle.box.borderRadius, inputStyle.accent, inputStyle.accent, 0.0f);
     if (m_editing) {
-        const UITextStyle& textStyle = frame.style().resolveText("input-value");
-        m_textEditor.renderText(frame.text(), frame.style(), textStyle.font, textStyle.scale, frame.surface().origin);
+        const UITextStyle& textStyle = frame.style().resolveText("control-value");
+        m_textEditor.renderText(
+            frame.text(),
+            frame.style(),
+            textStyle.font,
+            textStyle.scale,
+            frame.surface().origin,
+            &textStyle);
     } else {
         frame.drawText(formattedValue(), {m_position, m_size}, frame.style().resolveText("control-value"));
     }
@@ -144,8 +150,14 @@ void NumberInput::renderTextOnly(const UIFrame& frame) const
 {
     if (!m_visible) return;
     if (m_editing) {
-        const UITextStyle& textStyle = frame.style().resolveText("input-value");
-        m_textEditor.renderText(frame.text(), frame.style(), textStyle.font, textStyle.scale, frame.surface().origin);
+        const UITextStyle& textStyle = frame.style().resolveText("control-value");
+        m_textEditor.renderText(
+            frame.text(),
+            frame.style(),
+            textStyle.font,
+            textStyle.scale,
+            frame.surface().origin,
+            &textStyle);
     } else {
         frame.drawText(formattedValue(), {m_position, m_size}, frame.style().resolveText("control-value"));
     }
