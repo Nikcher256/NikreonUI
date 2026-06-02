@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/UI/NumberInput.hpp"
+#include "Engine/UI/TextInput.hpp"
 #include "Engine/UI/Widget.hpp"
 
 #include <functional>
@@ -33,6 +34,7 @@ private:
     void updateChannel(UIContext& context, std::string_view suffix, float y, float& value);
     void layoutChannelInputs();
     void syncChannelInputs();
+    void syncHexInput();
     void notifyColorChanged();
     void updateHsvFromColor();
     [[nodiscard]] glm::vec2 popupPosition() const;
@@ -46,6 +48,8 @@ private:
     NumberInput m_redInput;
     NumberInput m_greenInput;
     NumberInput m_blueInput;
+    TextInput m_hexInput;
+    bool m_syncingInputs{false};
     std::function<void(const glm::vec4&)> m_onColorChanged;
 };
 

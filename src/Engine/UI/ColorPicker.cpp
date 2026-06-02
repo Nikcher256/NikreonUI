@@ -7,6 +7,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <iomanip>
+#include <sstream>
 #include <string>
 #include <utility>
 
@@ -17,7 +20,7 @@ namespace Engine {
 namespace {
 
 constexpr float ButtonHeight = 28.0f;
-constexpr glm::vec2 PopupSize{228.0f, 278.0f};
+constexpr glm::vec2 PopupSize{228.0f, 310.0f};
 constexpr glm::vec2 SaturationValueOffset{12.0f, 12.0f};
 constexpr glm::vec2 SaturationValueSize{174.0f, 150.0f};
 constexpr glm::vec2 HueOffset{194.0f, 12.0f};
@@ -31,8 +34,11 @@ constexpr float ChannelTrackSpacing = 20.0f;
 constexpr float ChannelTrackWidth = 146.0f;
 constexpr float ChannelInputX = 164.0f;
 constexpr float ChannelInputWidth = 52.0f;
-constexpr int SaturationValueSteps = 16;
-constexpr int HueSteps = 18;
+constexpr glm::vec2 HexInputOffset{12.0f, 276.0f};
+constexpr glm::vec2 HexInputSize{204.0f, 22.0f};
+constexpr int SaturationValueSteps = 24;
+constexpr int HueSteps = 24;
+constexpr int ChannelGradientSteps = 24;
 
 glm::vec4 hsvToRgb(const float hue, const float saturation, const float value)
 {
@@ -60,6 +66,29 @@ bool contains(const glm::vec2& point, const glm::vec2& position, const glm::vec2
         point.x <= position.x + size.x && point.y <= position.y + size.y;
 }
 
+std::string colorToHex(const glm::vec4& color)
+{
+    std::ostringstream stream;
+    stream << '#' << std::uppercase << std::hex << std::setfill('0')
+           << std::setw(2) << static_cast<int>(std::round(color.r * 255.0f))
+           << std::setw(2) << static_cast<int>(std::round(color.g * 255.0f))
+           << std::setw(2) << static_cast<int>(std::round(color.b * 255.0f));
+    return stream.str();
+}
+
+bool parseHexColor(const std::string_view text, glm::vec4& color)
+{
+    const std::string value{text.starts_with('#') ? text.substr(1) : text};
+    if (value.size() != 6) return false;
+    char* end = nullptr;
+    const unsigned long parsed = std::strtoul(value.c_str(), &end, 16);
+    if (end == nullptr || *end != '\0') return false;
+    color.r = static_cast<float>((parsed >> 16U) & 0xFFU) / 255.0f;
+    color.g = static_cast<float>((parsed >> 8U) & 0xFFU) / 255.0f;
+    color.b = static_cast<float>(parsed & 0xFFU) / 255.0f;
+    return true;
+}
+
 } // namespace
 
 ColorPicker::ColorPicker(std::string id, const glm::vec4& color)
@@ -67,13 +96,23 @@ ColorPicker::ColorPicker(std::string id, const glm::vec4& color)
     , m_redInput(m_id + ".red-input", color.r * 255.0f, 0.0f, 255.0f)
     , m_greenInput(m_id + ".green-input", color.g * 255.0f, 0.0f, 255.0f)
     , m_blueInput(m_id + ".blue-input", color.b * 255.0f, 0.0f, 255.0f)
+    , m_hexInput(m_id + ".hex-input", colorToHex(color))
 {
     m_redInput.setPrecision(0);
     m_greenInput.setPrecision(0);
     m_blueInput.setPrecision(0);
-    m_redInput.setOnValueChanged([this](const float value) { m_color.r = value / 255.0f; updateHsvFromColor(); notifyColorChanged(); });
-    m_greenInput.setOnValueChanged([this](const float value) { m_color.g = value / 255.0f; updateHsvFromColor(); notifyColorChanged(); });
-    m_blueInput.setOnValueChanged([this](const float value) { m_color.b = value / 255.0f; updateHsvFromColor(); notifyColorChanged(); });
+    m_redInput.setOnValueChanged([this](const float value) { if (!m_syncingInputs) { m_color.r = value / 255.0f; updateHsvFromColor(); syncHexInput(); notifyColorChanged(); } });
+    m_greenInput.setOnValueChanged([this](const float value) { if (!m_syncingInputs) { m_color.g = value / 255.0f; updateHsvFromColor(); syncHexInput(); notifyColorChanged(); } });
+    m_blueInput.setOnValueChanged([this](const float value) { if (!m_syncingInputs) { m_color.b = value / 255.0f; updateHsvFromColor(); syncHexInput(); notifyColorChanged(); } });
+    m_hexInput.setOnValueChanged([this](const std::string_view value) {
+        glm::vec4 color = m_color;
+        if (parseHexColor(value, color)) {
+            m_color = color;
+            updateHsvFromColor();
+            syncChannelInputs();
+            notifyColorChanged();
+        }
+    });
     setColor(color);
 }
 
@@ -120,6 +159,7 @@ void ColorPicker::updatePopup(UIContext& context, const TextRenderer& textRender
     m_redInput.update(context, textRenderer, style, textStyle.font, textStyle.scale);
     m_greenInput.update(context, textRenderer, style, textStyle.font, textStyle.scale);
     m_blueInput.update(context, textRenderer, style, textStyle.font, textStyle.scale);
+    m_hexInput.update(context, textRenderer, style, textStyle.font, textStyle.scale);
 }
 
 void ColorPicker::render(Renderer2D& renderer2D, const UIStyle& style) const
@@ -178,21 +218,23 @@ void ColorPicker::renderPopup(UIContext& context, Renderer2D& renderer2D, TextRe
     renderer2D.drawQuad(popup + CurrentPreviewOffset, PreviewSize, m_color);
     renderer2D.drawRect(popup + CurrentPreviewOffset, PreviewSize, style.field.border, 1.0f);
 
-    const glm::vec4 channels[] = {
-        {0.86f, 0.22f, 0.24f, 1.0f},
-        {0.24f, 0.72f, 0.38f, 1.0f},
-        {0.28f, 0.48f, 0.88f, 1.0f},
-    };
     const float values[] = {m_color.r, m_color.g, m_color.b};
     for (int index = 0; index < 3; ++index) {
         const glm::vec2 trackPosition = popup + glm::vec2{12.0f, ChannelTrackY + ChannelTrackSpacing * index};
-        renderer2D.drawSdfRect(trackPosition, {ChannelTrackWidth, ChannelTrackHeight}, 3.0f, style.field.fill, style.field.border, 1.0f);
-        renderer2D.drawSdfRect(trackPosition, {ChannelTrackWidth * values[index], ChannelTrackHeight}, 3.0f, channels[index], channels[index], 0.0f);
+        const float segmentWidth = ChannelTrackWidth / static_cast<float>(ChannelGradientSteps);
+        for (int step = 0; step < ChannelGradientSteps; ++step) {
+            glm::vec4 segmentColor = m_color;
+            segmentColor[index] = static_cast<float>(step) / static_cast<float>(ChannelGradientSteps - 1);
+            renderer2D.drawQuad(trackPosition + glm::vec2{segmentWidth * step, 0.0f}, {segmentWidth + 0.5f, ChannelTrackHeight}, segmentColor);
+        }
+        renderer2D.drawRect(trackPosition, {ChannelTrackWidth, ChannelTrackHeight}, style.field.border, 1.0f);
+        renderer2D.drawRect(trackPosition + glm::vec2{ChannelTrackWidth * values[index] - 2.0f, -2.0f}, {4.0f, ChannelTrackHeight + 4.0f}, glm::vec4{1.0f}, 1.0f);
     }
     UIFrame frame{context, renderer2D, textRenderer, style};
     m_redInput.render(frame);
     m_greenInput.render(frame);
     m_blueInput.render(frame);
+    m_hexInput.render(frame);
 }
 
 void ColorPicker::setColor(const glm::vec4& color)
@@ -261,13 +303,24 @@ void ColorPicker::layoutChannelInputs()
     m_redInput.setBounds(popup + glm::vec2{ChannelInputX, ChannelTrackY - 4.0f}, {ChannelInputWidth, 22.0f});
     m_greenInput.setBounds(popup + glm::vec2{ChannelInputX, ChannelTrackY + ChannelTrackSpacing - 4.0f}, {ChannelInputWidth, 22.0f});
     m_blueInput.setBounds(popup + glm::vec2{ChannelInputX, ChannelTrackY + ChannelTrackSpacing * 2.0f - 4.0f}, {ChannelInputWidth, 22.0f});
+    m_hexInput.setBounds(popup + HexInputOffset, HexInputSize);
 }
 
 void ColorPicker::syncChannelInputs()
 {
+    m_syncingInputs = true;
     m_redInput.setValue(m_color.r * 255.0f);
     m_greenInput.setValue(m_color.g * 255.0f);
     m_blueInput.setValue(m_color.b * 255.0f);
+    m_syncingInputs = false;
+    syncHexInput();
+}
+
+void ColorPicker::syncHexInput()
+{
+    if (!m_hexInput.focused()) {
+        m_hexInput.setValue(colorToHex(m_color));
+    }
 }
 
 void ColorPicker::notifyColorChanged()
