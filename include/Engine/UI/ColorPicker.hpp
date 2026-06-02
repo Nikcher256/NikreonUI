@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/UI/NumberInput.hpp"
 #include "Engine/UI/Widget.hpp"
 
 #include <functional>
@@ -8,6 +9,8 @@
 
 namespace Engine {
 
+class TextRenderer;
+
 class ColorPicker final : public Widget {
 public:
     ColorPicker(std::string id, const glm::vec4& color = {1.0f, 1.0f, 1.0f, 1.0f});
@@ -15,7 +18,8 @@ public:
     void update(UIContext& context) override;
     void render(Renderer2D& renderer2D, const UIStyle& style) const override;
     void updatePopup(UIContext& context);
-    void renderPopup(Renderer2D& renderer2D, const UIStyle& style) const;
+    void updatePopup(UIContext& context, const TextRenderer& textRenderer, const UIStyle& style);
+    void renderPopup(UIContext& context, Renderer2D& renderer2D, TextRenderer& textRenderer, const UIStyle& style) const;
 
     void setColor(const glm::vec4& color);
     void setOnColorChanged(std::function<void(const glm::vec4&)> callback);
@@ -27,6 +31,8 @@ private:
     void updateSaturationValue(UIContext& context);
     void updateHue(UIContext& context);
     void updateChannel(UIContext& context, std::string_view suffix, float y, float& value);
+    void layoutChannelInputs();
+    void syncChannelInputs();
     void notifyColorChanged();
     void updateHsvFromColor();
     [[nodiscard]] glm::vec2 popupPosition() const;
@@ -37,6 +43,9 @@ private:
     float m_saturation{0.0f};
     float m_value{1.0f};
     bool m_popupOpen{false};
+    NumberInput m_redInput;
+    NumberInput m_greenInput;
+    NumberInput m_blueInput;
     std::function<void(const glm::vec4&)> m_onColorChanged;
 };
 

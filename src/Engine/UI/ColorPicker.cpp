@@ -1,6 +1,8 @@
 #include "Engine/UI/ColorPicker.hpp"
 
 #include "Engine/Renderer/Renderer2D.hpp"
+#include "Engine/Renderer/TextRenderer.hpp"
+#include "Engine/UI/UIFrame.hpp"
 #include "Engine/UI/UIStyle.hpp"
 
 #include <algorithm>
@@ -26,6 +28,9 @@ constexpr glm::vec2 PreviewSize{100.0f, 18.0f};
 constexpr float ChannelTrackY = 204.0f;
 constexpr float ChannelTrackHeight = 14.0f;
 constexpr float ChannelTrackSpacing = 20.0f;
+constexpr float ChannelTrackWidth = 146.0f;
+constexpr float ChannelInputX = 164.0f;
+constexpr float ChannelInputWidth = 52.0f;
 constexpr int SaturationValueSteps = 16;
 constexpr int HueSteps = 18;
 
@@ -59,7 +64,16 @@ bool contains(const glm::vec2& point, const glm::vec2& position, const glm::vec2
 
 ColorPicker::ColorPicker(std::string id, const glm::vec4& color)
     : Widget(std::move(id))
+    , m_redInput(m_id + ".red-input", color.r * 255.0f, 0.0f, 255.0f)
+    , m_greenInput(m_id + ".green-input", color.g * 255.0f, 0.0f, 255.0f)
+    , m_blueInput(m_id + ".blue-input", color.b * 255.0f, 0.0f, 255.0f)
 {
+    m_redInput.setPrecision(0);
+    m_greenInput.setPrecision(0);
+    m_blueInput.setPrecision(0);
+    m_redInput.setOnValueChanged([this](const float value) { m_color.r = value / 255.0f; updateHsvFromColor(); notifyColorChanged(); });
+    m_greenInput.setOnValueChanged([this](const float value) { m_color.g = value / 255.0f; updateHsvFromColor(); notifyColorChanged(); });
+    m_blueInput.setOnValueChanged([this](const float value) { m_color.b = value / 255.0f; updateHsvFromColor(); notifyColorChanged(); });
     setColor(color);
 }
 
@@ -97,22 +111,31 @@ void ColorPicker::updatePopup(UIContext& context)
     updateChannel(context, ".blue", ChannelTrackY + ChannelTrackSpacing * 2.0f, m_color.b);
 }
 
+void ColorPicker::updatePopup(UIContext& context, const TextRenderer& textRenderer, const UIStyle& style)
+{
+    updatePopup(context);
+    if (!m_visible || !m_popupOpen) return;
+    layoutChannelInputs();
+    const UITextStyle& textStyle = style.resolveText("input-value");
+    m_redInput.update(context, textRenderer, style, textStyle.font, textStyle.scale);
+    m_greenInput.update(context, textRenderer, style, textStyle.font, textStyle.scale);
+    m_blueInput.update(context, textRenderer, style, textStyle.font, textStyle.scale);
+}
+
 void ColorPicker::render(Renderer2D& renderer2D, const UIStyle& style) const
 {
     if (!m_visible) return;
 
     const glm::vec4 border = style.field.border;
-    renderer2D.drawSdfRect(m_position, {m_size.x, ButtonHeight}, 4.0f, style.field.fill, border, 1.0f);
-    renderer2D.drawSdfRect(
-        m_position + glm::vec2{4.0f},
-        {std::max(m_size.x - 8.0f, 0.0f), ButtonHeight - 8.0f},
-        3.0f,
-        m_color,
-        border,
-        1.0f);
+    renderer2D.drawQuad(m_position, {m_size.x, ButtonHeight}, style.field.fill);
+    renderer2D.drawRect(m_position, {m_size.x, ButtonHeight}, border, 1.0f);
+    const glm::vec2 swatchPosition = m_position + glm::vec2{4.0f};
+    const glm::vec2 swatchSize{std::max(m_size.x - 8.0f, 0.0f), ButtonHeight - 8.0f};
+    renderer2D.drawQuad(swatchPosition, swatchSize, m_color);
+    renderer2D.drawRect(swatchPosition, swatchSize, border, 1.0f);
 }
 
-void ColorPicker::renderPopup(Renderer2D& renderer2D, const UIStyle& style) const
+void ColorPicker::renderPopup(UIContext& context, Renderer2D& renderer2D, TextRenderer& textRenderer, const UIStyle& style) const
 {
     if (!m_visible || !m_popupOpen) return;
 
@@ -163,9 +186,13 @@ void ColorPicker::renderPopup(Renderer2D& renderer2D, const UIStyle& style) cons
     const float values[] = {m_color.r, m_color.g, m_color.b};
     for (int index = 0; index < 3; ++index) {
         const glm::vec2 trackPosition = popup + glm::vec2{12.0f, ChannelTrackY + ChannelTrackSpacing * index};
-        renderer2D.drawSdfRect(trackPosition, {204.0f, ChannelTrackHeight}, 3.0f, style.field.fill, style.field.border, 1.0f);
-        renderer2D.drawSdfRect(trackPosition, {204.0f * values[index], ChannelTrackHeight}, 3.0f, channels[index], channels[index], 0.0f);
+        renderer2D.drawSdfRect(trackPosition, {ChannelTrackWidth, ChannelTrackHeight}, 3.0f, style.field.fill, style.field.border, 1.0f);
+        renderer2D.drawSdfRect(trackPosition, {ChannelTrackWidth * values[index], ChannelTrackHeight}, 3.0f, channels[index], channels[index], 0.0f);
     }
+    UIFrame frame{context, renderer2D, textRenderer, style};
+    m_redInput.render(frame);
+    m_greenInput.render(frame);
+    m_blueInput.render(frame);
 }
 
 void ColorPicker::setColor(const glm::vec4& color)
@@ -174,6 +201,7 @@ void ColorPicker::setColor(const glm::vec4& color)
     if (clampedColor == m_color) return;
     m_color = clampedColor;
     updateHsvFromColor();
+    syncChannelInputs();
     notifyColorChanged();
 }
 
@@ -201,6 +229,7 @@ void ColorPicker::updateSaturationValue(UIContext& context)
     const float alpha = m_color.a;
     m_color = hsvToRgb(m_hue, m_saturation, m_value);
     m_color.a = alpha;
+    syncChannelInputs();
     notifyColorChanged();
 }
 
@@ -212,16 +241,33 @@ void ColorPicker::updateHue(UIContext& context)
     const float alpha = m_color.a;
     m_color = hsvToRgb(m_hue, m_saturation, m_value);
     m_color.a = alpha;
+    syncChannelInputs();
     notifyColorChanged();
 }
 
 void ColorPicker::updateChannel(UIContext& context, const std::string_view suffix, const float y, float& value)
 {
     const glm::vec2 position = popupPosition() + glm::vec2{12.0f, y};
-    if (!context.interact(m_id + std::string{suffix}, position, {204.0f, ChannelTrackHeight}).held) return;
-    value = std::clamp((context.mousePosition().x - position.x) / 204.0f, 0.0f, 1.0f);
+    if (!context.interact(m_id + std::string{suffix}, position, {ChannelTrackWidth, ChannelTrackHeight}).held) return;
+    value = std::clamp((context.mousePosition().x - position.x) / ChannelTrackWidth, 0.0f, 1.0f);
     updateHsvFromColor();
+    syncChannelInputs();
     notifyColorChanged();
+}
+
+void ColorPicker::layoutChannelInputs()
+{
+    const glm::vec2 popup = popupPosition();
+    m_redInput.setBounds(popup + glm::vec2{ChannelInputX, ChannelTrackY - 4.0f}, {ChannelInputWidth, 22.0f});
+    m_greenInput.setBounds(popup + glm::vec2{ChannelInputX, ChannelTrackY + ChannelTrackSpacing - 4.0f}, {ChannelInputWidth, 22.0f});
+    m_blueInput.setBounds(popup + glm::vec2{ChannelInputX, ChannelTrackY + ChannelTrackSpacing * 2.0f - 4.0f}, {ChannelInputWidth, 22.0f});
+}
+
+void ColorPicker::syncChannelInputs()
+{
+    m_redInput.setValue(m_color.r * 255.0f);
+    m_greenInput.setValue(m_color.g * 255.0f);
+    m_blueInput.setValue(m_color.b * 255.0f);
 }
 
 void ColorPicker::notifyColorChanged()
