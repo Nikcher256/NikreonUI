@@ -42,10 +42,22 @@ struct UIInteraction {
     bool pressed{false};
 };
 
+struct UIInteractionLayer {
+    std::string id;
+    UIClipRect bounds;
+    int zIndex{0};
+    bool modal{false};
+};
+
 class UIContext {
 public:
     void beginFrame(const UIInputState& input);
     void endFrame();
+
+    void registerLayer(std::string_view id, int zIndex, const UIClipRect& bounds, bool modal = false);
+    void unregisterLayer(std::string_view id);
+    void pushLayer(std::string_view id);
+    void popLayer();
 
     [[nodiscard]] UIInteraction interact(std::string_view id, const glm::vec2& position, const glm::vec2& size);
     [[nodiscard]] bool button(std::string_view id, const glm::vec2& position, const glm::vec2& size);
@@ -71,6 +83,10 @@ public:
 
 private:
     [[nodiscard]] bool contains(const glm::vec2& position, const glm::vec2& size) const;
+    [[nodiscard]] bool rawContains(const glm::vec2& position, const glm::vec2& size) const;
+    [[nodiscard]] bool layerAllowsInteraction(std::string_view layerId) const;
+    [[nodiscard]] const UIInteractionLayer* findLayer(std::string_view id) const;
+    [[nodiscard]] const UIInteractionLayer* topInputLayer() const;
 
     glm::vec2 m_mousePosition{0.0f, 0.0f};
     glm::vec2 m_scrollDelta{0.0f, 0.0f};
@@ -82,6 +98,8 @@ private:
     std::string m_hotId;
     std::string m_activeId;
     std::string m_focusedId;
+    std::vector<UIInteractionLayer> m_layers;
+    std::vector<std::string> m_layerStack;
     bool m_mouseDown{false};
     bool m_previousMouseDown{false};
     bool m_mousePressed{false};

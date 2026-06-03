@@ -39,4 +39,24 @@ int main()
     picker.updatePopup(context);
     assert(picker.color().g > 0.45f);
     assert(picker.color().b > 0.45f);
+
+    Engine::UIContext layeredContext;
+    layeredContext.beginFrame({.mousePosition = {25.0f, 25.0f}, .primaryMouseDown = true});
+    layeredContext.registerLayer("popup", 100, {{0.0f, 0.0f}, {50.0f, 50.0f}});
+    const Engine::UIInteraction blocked = layeredContext.interact("base-button", {0.0f, 0.0f}, {50.0f, 50.0f});
+    assert(!blocked.hovered);
+    layeredContext.pushLayer("popup");
+    const Engine::UIInteraction popupDown = layeredContext.interact("popup-button", {0.0f, 0.0f}, {50.0f, 50.0f});
+    assert(popupDown.hovered);
+    assert(popupDown.held);
+    layeredContext.popLayer();
+    layeredContext.endFrame();
+
+    layeredContext.beginFrame({.mousePosition = {25.0f, 25.0f}, .primaryMouseDown = false});
+    layeredContext.registerLayer("popup", 100, {{0.0f, 0.0f}, {50.0f, 50.0f}});
+    layeredContext.pushLayer("popup");
+    const Engine::UIInteraction popupClick = layeredContext.interact("popup-button", {0.0f, 0.0f}, {50.0f, 50.0f});
+    assert(popupClick.pressed);
+    layeredContext.popLayer();
+    layeredContext.endFrame();
 }

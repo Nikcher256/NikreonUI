@@ -21,6 +21,7 @@ public:
     void updatePopup(UIContext& context);
     void updatePopup(UIContext& context, const TextRenderer& textRenderer, const UIStyle& style);
     void renderPopup(UIContext& context, Renderer2D& renderer2D, TextRenderer& textRenderer, const UIStyle& style) const;
+    void registerPopupLayer(UIContext& context, int zIndex = 100, bool modal = false) const;
 
     void setColor(const glm::vec4& color);
     void setOnColorChanged(std::function<void(const glm::vec4&)> callback);

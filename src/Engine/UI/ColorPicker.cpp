@@ -162,11 +162,13 @@ void ColorPicker::updatePopup(UIContext& context)
         return;
     }
 
+    context.pushLayer(m_id + ".popup-layer");
     updateSaturationValue(context);
     updateHue(context);
     if (context.interact(m_id + ".old-preview", popup + OldPreviewOffset, PreviewSize).pressed) {
         setColor(m_originalColor);
     }
+    context.popLayer();
 }
 
 void ColorPicker::updatePopup(UIContext& context, const TextRenderer& textRenderer, const UIStyle& style)
@@ -175,10 +177,12 @@ void ColorPicker::updatePopup(UIContext& context, const TextRenderer& textRender
     if (!m_visible || !m_popupOpen) return;
     layoutChannelInputs();
     const UITextStyle& textStyle = style.resolveText("input-value");
+    context.pushLayer(m_id + ".popup-layer");
     m_redSlider.update(context, textRenderer, style, textStyle.font, textStyle.scale);
     m_greenSlider.update(context, textRenderer, style, textStyle.font, textStyle.scale);
     m_blueSlider.update(context, textRenderer, style, textStyle.font, textStyle.scale); 
     m_hexInput.update(context, textRenderer, style, textStyle.font, textStyle.scale);
+    context.popLayer();
 }
 
 void ColorPicker::render(Renderer2D& renderer2D, const UIStyle& style) const
@@ -267,16 +271,30 @@ void ColorPicker::renderPopup(UIContext& context, Renderer2D& renderer2D, TextRe
         {HueSize.x + 4.0f, 4.0f},
         {1.0f, 1.0f, 1.0f, 1.0f},
         1.0f);
-    renderer2D.drawQuad(popup + OldPreviewOffset, PreviewSize, m_originalColor);
-    renderer2D.drawRect(popup + OldPreviewOffset, PreviewSize, style.field.border, 1.0f);
-    renderer2D.drawQuad(popup + CurrentPreviewOffset, PreviewSize, m_color);
-    renderer2D.drawRect(popup + CurrentPreviewOffset, PreviewSize, style.field.border, 1.0f);
+        
+    glm::vec4 oldPreviewColor = m_originalColor;
+    oldPreviewColor.a = 1.0f;
+
+    glm::vec4 currentPreviewColor = m_color;
+    currentPreviewColor.a = 1.0f;
+    renderer2D.drawSdfRect(popup + OldPreviewOffset, PreviewSize, 4.0f, oldPreviewColor, style.field.border, 1.0f);
+    renderer2D.drawSdfRect(popup + CurrentPreviewOffset, PreviewSize, 4.0f, currentPreviewColor, style.field.border, 1.0f);
+
 
     UIFrame frame{context, renderer2D, textRenderer, style};
     m_redSlider.render(frame);
     m_greenSlider.render(frame);
     m_blueSlider.render(frame);
     m_hexInput.render(frame);
+}
+
+void ColorPicker::registerPopupLayer(UIContext& context, const int zIndex, const bool modal) const
+{
+    if (!m_visible || !m_popupOpen) {
+        return;
+    }
+
+    context.registerLayer(m_id + ".popup-layer", zIndex, {popupPosition(), PopupSize}, modal);
 }
 
 void ColorPicker::setColor(const glm::vec4& color)

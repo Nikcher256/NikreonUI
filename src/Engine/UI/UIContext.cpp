@@ -28,6 +28,8 @@ void UIContext::beginFrame(const UIInputState& input)
     m_typedCharacters = input.typedCharacters;
     m_pressedKeys = input.pressedKeys;
     m_clipStack.clear();
+    m_layers.clear();
+    m_layerStack.clear();
     m_previousMouseDown = m_mouseDown;
     m_mouseDown = input.primaryMouseDown;
     m_shiftDown = input.shiftDown;
@@ -43,11 +45,53 @@ void UIContext::endFrame()
     }
 }
 
+void UIContext::registerLayer(const std::string_view id, const int zIndex, const UIClipRect& bounds, const bool modal)
+{
+    const std::string layerId{id};
+    for (UIInteractionLayer& layer : m_layers) {
+        if (layer.id == layerId) {
+            layer.zIndex = zIndex;
+            layer.bounds = bounds;
+            layer.modal = modal;
+            return;
+        }
+    }
+
+    m_layers.push_back({layerId, bounds, zIndex, modal});
+}
+
+void UIContext::unregisterLayer(const std::string_view id)
+{
+    const std::string layerId{id};
+    m_layers.erase(
+        std::remove_if(m_layers.begin(), m_layers.end(), [&layerId](const UIInteractionLayer& layer) {
+            return layer.id == layerId;
+        }),
+        m_layers.end());
+    m_layerStack.erase(
+        std::remove(m_layerStack.begin(), m_layerStack.end(), layerId),
+        m_layerStack.end());
+}
+
+void UIContext::pushLayer(const std::string_view id)
+{
+    m_layerStack.emplace_back(id);
+}
+
+void UIContext::popLayer()
+{
+    if (!m_layerStack.empty()) {
+        m_layerStack.pop_back();
+    }
+}
+
 // Computes hover, hold, and click state for a rectangular widget.
 UIInteraction UIContext::interact(const std::string_view id, const glm::vec2& position, const glm::vec2& size)
 {
     const std::string widgetId{id};
-    const bool hovered = contains(position, size);
+    const std::string_view layerId = m_layerStack.empty() ? std::string_view{} : std::string_view{m_layerStack.back()};
+    const bool layerAllowed = layerAllowsInteraction(layerId);
+    const bool hovered = layerAllowed && contains(position, size);
     if (hovered) {
         m_hotId = widgetId;
     }
@@ -184,13 +228,61 @@ bool UIContext::isActive(const std::string_view id) const
     return m_activeId == id;
 }
 
-// Tests whether the captured mouse position lies inside a rectangle.
-bool UIContext::contains(const glm::vec2& position, const glm::vec2& size) const
+bool UIContext::rawContains(const glm::vec2& position, const glm::vec2& size) const
 {
-    const bool insideWidget = m_mousePosition.x >= position.x &&
+    return m_mousePosition.x >= position.x &&
         m_mousePosition.y >= position.y &&
         m_mousePosition.x <= position.x + size.x &&
         m_mousePosition.y <= position.y + size.y;
+}
+
+bool UIContext::layerAllowsInteraction(const std::string_view layerId) const
+{
+    const UIInteractionLayer* topLayer = topInputLayer();
+    if (topLayer == nullptr) {
+        return true;
+    }
+
+    const UIInteractionLayer* currentLayer = findLayer(layerId);
+    const int currentZ = currentLayer != nullptr ? currentLayer->zIndex : 0;
+    if (currentZ > topLayer->zIndex) {
+        return true;
+    }
+
+    return currentLayer != nullptr && currentLayer->id == topLayer->id;
+}
+
+const UIInteractionLayer* UIContext::findLayer(const std::string_view id) const
+{
+    if (id.empty()) {
+        return nullptr;
+    }
+
+    const auto found = std::find_if(m_layers.begin(), m_layers.end(), [id](const UIInteractionLayer& layer) {
+        return layer.id == id;
+    });
+    return found == m_layers.end() ? nullptr : &*found;
+}
+
+const UIInteractionLayer* UIContext::topInputLayer() const
+{
+    const UIInteractionLayer* topLayer = nullptr;
+    for (const UIInteractionLayer& layer : m_layers) {
+        if (!layer.modal && !rawContains(layer.bounds.position, layer.bounds.size)) {
+            continue;
+        }
+
+        if (topLayer == nullptr || layer.zIndex >= topLayer->zIndex) {
+            topLayer = &layer;
+        }
+    }
+    return topLayer;
+}
+
+// Tests whether the captured mouse position lies inside a rectangle.
+bool UIContext::contains(const glm::vec2& position, const glm::vec2& size) const
+{
+    const bool insideWidget = rawContains(position, size);
     if (!insideWidget || m_clipStack.empty()) {
         return insideWidget;
     }
