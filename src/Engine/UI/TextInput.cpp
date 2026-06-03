@@ -384,6 +384,12 @@ void TextInput::selectAll()
     m_caretIndex = m_value.size();
 }
 
+void TextInput::moveCaretToEnd()
+{
+    m_caretIndex = m_value.size();
+    m_selectionAnchor = m_caretIndex;
+}
+
 const std::string& TextInput::value() const
 {
     return m_value;

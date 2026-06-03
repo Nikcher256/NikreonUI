@@ -35,6 +35,7 @@ public:
     void clearStyleOverride();
     void setOnValueChanged(std::function<void(std::string_view)> callback);
     void selectAll();
+    void moveCaretToEnd();
 
     [[nodiscard]] const std::string& value() const;
     [[nodiscard]] const std::string& placeholder() const;
