@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <string_view>
 
@@ -27,6 +28,8 @@ public:
     virtual ~TextRenderer() = default;
 
     virtual void begin(const glm::uvec2& viewportSize) = 0;
+    virtual void beginCompositeRenderItem(std::uint64_t renderOrder) { (void)renderOrder; }
+    virtual void endCompositeRenderItem() {}
     virtual bool loadFont(std::string_view name, const std::filesystem::path& path, float pixelSize) = 0;
     virtual void drawText(
         std::string_view text,

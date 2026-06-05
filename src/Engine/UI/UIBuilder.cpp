@@ -377,13 +377,16 @@ void UIBuilder::render()
 {
     UIFrame frame{*m_context, *m_renderer, *m_text, *m_style, m_surface};
     m_renderQueue.add(UIRenderLayer::Background, [this, &frame]() {
+        const UICompositeRenderScope compositeScope{frame};
         renderBase(frame);
     });
-    m_renderQueue.add(UIRenderLayer::Popup, [this]() {
+    m_renderQueue.add(UIRenderLayer::Popup, [this, &frame]() {
+        const UICompositeRenderScope compositeScope{frame};
         renderPopups();
     });
-    m_renderQueue.add(UIRenderLayer::Tooltip, [this]() {
+    m_renderQueue.add(UIRenderLayer::Tooltip, [this, &frame]() {
         if (!m_tooltipText.empty()) {
+            const UICompositeRenderScope compositeScope{frame};
             renderTooltip(m_tooltipText);
         }
     });

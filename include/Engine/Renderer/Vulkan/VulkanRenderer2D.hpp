@@ -42,6 +42,9 @@ public:
     VulkanRenderer2D& operator=(VulkanRenderer2D&&) = delete;
 
     void begin(const glm::uvec2& viewportSize) override;
+    [[nodiscard]] std::uint64_t reserveRenderOrder() override;
+    void beginCompositeRenderItem(std::uint64_t renderOrder) override;
+    void endCompositeRenderItem() override;
     void drawQuad(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color) override;
     void drawGradientQuad(
     const glm::vec2& position,
@@ -62,6 +65,8 @@ public:
     void popClipRect() override;
     void end() override;
     void record(VkCommandBuffer commandBuffer);
+    void record(VkCommandBuffer commandBuffer, std::uint64_t renderOrder) const;
+    void appendRenderOrders(std::vector<std::uint64_t>& renderOrders) const;
 
     [[nodiscard]] std::size_t quadCount() const;
     [[nodiscard]] std::size_t maxQuads() const;
@@ -78,11 +83,21 @@ private:
     void setScissor(VkCommandBuffer commandBuffer, const UIClipRect& clipRect) const;
     [[nodiscard]] UIClipRect currentClipRect() const;
 
-    struct DrawBatch {
+    enum class DrawCommandType {
+        Quad,
+        SdfRect,
+    };
+
+    struct DrawCommand {
+        DrawCommandType type{DrawCommandType::Quad};
+        std::uint64_t renderOrder{0};
         UIClipRect clipRect;
         std::uint32_t first{0};
         std::uint32_t count{0};
     };
+
+    void appendDrawCommand(DrawCommandType type, UIClipRect clipRect, std::uint32_t first, std::uint32_t count);
+    [[nodiscard]] std::uint64_t currentRenderOrder();
 
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& buffer, VkDeviceMemory& memory);
     [[nodiscard]] glm::vec2 toNdc(const glm::vec2& pixelPosition) const;
@@ -114,9 +129,11 @@ private:
     std::size_t m_maxQuads{0};
     std::vector<Vertex> m_vertices;
     std::vector<SdfInstance> m_sdfInstances;
-    std::vector<DrawBatch> m_quadBatches;
-    std::vector<DrawBatch> m_sdfBatches;
+    std::vector<DrawCommand> m_drawCommands;
     std::vector<UIClipRect> m_clipStack;
+    std::uint64_t m_nextRenderOrder{1};
+    std::uint64_t m_currentCompositeRenderOrder{0};
+    bool m_compositeRenderItemActive{false};
 };
 
 } // namespace Engine

@@ -19,6 +19,9 @@ public:
     virtual ~Renderer2D() = default;
 
     virtual void begin(const glm::uvec2& viewportSize) = 0;
+    [[nodiscard]] virtual std::uint64_t reserveRenderOrder() { return 0; }
+    virtual void beginCompositeRenderItem(std::uint64_t renderOrder) { (void)renderOrder; }
+    virtual void endCompositeRenderItem() {}
     virtual void drawQuad(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color) = 0;
     virtual void drawGradientQuad(
         const glm::vec2& position,

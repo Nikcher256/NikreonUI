@@ -7,6 +7,7 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 
 #include <glm/common.hpp>
@@ -20,6 +21,7 @@ namespace Engine {
 namespace {
 
 constexpr std::size_t VerticesPerGlyph = 6;
+constexpr std::uint64_t UncompositedTextRenderOrder = std::numeric_limits<std::uint64_t>::max();
 
 bool sameClipRect(const UIClipRect& left, const UIClipRect& right)
 {
@@ -148,6 +150,20 @@ void VulkanTextRenderer::begin(const glm::uvec2& viewportSize)
     m_vertices.clear();
     m_batches.clear();
     m_clipStack.clear();
+    m_currentCompositeRenderOrder = 0;
+    m_compositeRenderItemActive = false;
+}
+
+void VulkanTextRenderer::beginCompositeRenderItem(const std::uint64_t renderOrder)
+{
+    m_currentCompositeRenderOrder = renderOrder;
+    m_compositeRenderItemActive = true;
+}
+
+void VulkanTextRenderer::endCompositeRenderItem()
+{
+    m_currentCompositeRenderOrder = 0;
+    m_compositeRenderItemActive = false;
 }
 
 bool VulkanTextRenderer::loadFont(const std::string_view name, const std::filesystem::path& path, const float pixelSize)
@@ -291,10 +307,15 @@ void VulkanTextRenderer::drawText(
         pen.x -= measuredWidth;
     }
 
+    const std::uint64_t renderOrder = currentRenderOrder();
     const UIClipRect clipRect = currentClipRect();
-    if (m_batches.empty() || m_batches.back().font != font || !sameClipRect(m_batches.back().clipRect, clipRect)) {
+    if (m_batches.empty() ||
+        m_batches.back().font != font ||
+        m_batches.back().renderOrder != renderOrder ||
+        !sameClipRect(m_batches.back().clipRect, clipRect)) {
         m_batches.push_back({
             font,
+            renderOrder,
             clipRect,
             static_cast<std::uint32_t>(m_vertices.size()),
             0,
@@ -362,10 +383,15 @@ void VulkanTextRenderer::drawSolidRect(
         return;
     }
 
+    const std::uint64_t renderOrder = currentRenderOrder();
     const UIClipRect clipRect = currentClipRect();
-    if (m_batches.empty() || m_batches.back().font != font || !sameClipRect(m_batches.back().clipRect, clipRect)) {
+    if (m_batches.empty() ||
+        m_batches.back().font != font ||
+        m_batches.back().renderOrder != renderOrder ||
+        !sameClipRect(m_batches.back().clipRect, clipRect)) {
         m_batches.push_back({
             font,
+            renderOrder,
             clipRect,
             static_cast<std::uint32_t>(m_vertices.size()),
             0,
@@ -441,6 +467,18 @@ void VulkanTextRenderer::end()
 
 void VulkanTextRenderer::record(const VkCommandBuffer commandBuffer) const
 {
+    std::vector<std::uint64_t> renderOrders;
+    appendRenderOrders(renderOrders);
+    std::sort(renderOrders.begin(), renderOrders.end());
+    renderOrders.erase(std::unique(renderOrders.begin(), renderOrders.end()), renderOrders.end());
+
+    for (const std::uint64_t renderOrder : renderOrders) {
+        record(commandBuffer, renderOrder);
+    }
+}
+
+void VulkanTextRenderer::record(const VkCommandBuffer commandBuffer, const std::uint64_t renderOrder) const
+{
     if (m_vertices.empty()) {
         return;
     }
@@ -451,7 +489,7 @@ void VulkanTextRenderer::record(const VkCommandBuffer commandBuffer) const
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, &m_vertexBuffer, &offset);
 
     for (const Batch& batch : m_batches) {
-        if (batch.vertexCount == 0) {
+        if (batch.vertexCount == 0 || batch.renderOrder != renderOrder) {
             continue;
         }
 
@@ -466,6 +504,15 @@ void VulkanTextRenderer::record(const VkCommandBuffer commandBuffer) const
             0,
             nullptr);
         vkCmdDraw(commandBuffer, batch.vertexCount, 1, batch.firstVertex, 0);
+    }
+}
+
+void VulkanTextRenderer::appendRenderOrders(std::vector<std::uint64_t>& renderOrders) const
+{
+    for (const Batch& batch : m_batches) {
+        if (batch.vertexCount > 0) {
+            renderOrders.push_back(batch.renderOrder);
+        }
     }
 }
 
@@ -673,6 +720,11 @@ void VulkanTextRenderer::uploadVertices()
     checkVk(vkMapMemory(m_device, m_vertexBufferMemory, 0, uploadSize, 0, &mappedMemory), "Failed to map TextRenderer vertex buffer memory.");
     std::memcpy(mappedMemory, m_vertices.data(), static_cast<std::size_t>(uploadSize));
     vkUnmapMemory(m_device, m_vertexBufferMemory);
+}
+
+std::uint64_t VulkanTextRenderer::currentRenderOrder() const
+{
+    return m_compositeRenderItemActive ? m_currentCompositeRenderOrder : UncompositedTextRenderOrder;
 }
 
 void VulkanTextRenderer::createFontTexture(Font& font, const std::vector<std::uint8_t>& pixels, const std::uint32_t width, const std::uint32_t height)

@@ -34,6 +34,8 @@ public:
     bool drawText(std::string_view value, const UIClipRect& bounds, const UITextStyle& textStyle) const;
     void pushClip(const UIClipRect& bounds) const;
     void popClip() const;
+    void beginCompositeRenderItem() const;
+    void endCompositeRenderItem() const;
 
 private:
     UIContext* m_input;
@@ -41,6 +43,18 @@ private:
     TextRenderer* m_text;
     const UIStyle* m_style;
     UISurface m_surface;
+};
+
+class UICompositeRenderScope {
+public:
+    explicit UICompositeRenderScope(const UIFrame& frame);
+    ~UICompositeRenderScope();
+
+    UICompositeRenderScope(const UICompositeRenderScope&) = delete;
+    UICompositeRenderScope& operator=(const UICompositeRenderScope&) = delete;
+
+private:
+    const UIFrame* m_frame;
 };
 
 } // namespace Engine

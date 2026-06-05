@@ -143,7 +143,8 @@ bool UIFrame::drawText(const std::string_view value, const UIClipRect& bounds, c
     glm::vec4 color = textStyle.color;
     color.a *= std::clamp(textStyle.opacity, 0.0f, 1.0f);
 
-    if (textStyle.overflow == UIOverflow::Clip || textStyle.overflow == UIOverflow::Ellipsis) {
+    const bool clipsText = textStyle.overflow == UIOverflow::Clip;
+    if (clipsText) {
         m_text->pushClipRect(toScreen(bounds));
     }
 
@@ -159,7 +160,7 @@ bool UIFrame::drawText(const std::string_view value, const UIClipRect& bounds, c
         m_text->drawText(lines[index], linePosition + textStyle.offset, color, textStyle.font, textStyle.scale);
     }
 
-    if (textStyle.overflow == UIOverflow::Clip || textStyle.overflow == UIOverflow::Ellipsis) {
+    if (clipsText) {
         m_text->popClipRect();
     }
 
@@ -179,6 +180,30 @@ void UIFrame::popClip() const
     m_text->popClipRect();
     m_shapes->popClipRect();
     m_input->popClipRect();
+}
+
+void UIFrame::beginCompositeRenderItem() const
+{
+    const std::uint64_t renderOrder = m_shapes->reserveRenderOrder();
+    m_shapes->beginCompositeRenderItem(renderOrder);
+    m_text->beginCompositeRenderItem(renderOrder);
+}
+
+void UIFrame::endCompositeRenderItem() const
+{
+    m_text->endCompositeRenderItem();
+    m_shapes->endCompositeRenderItem();
+}
+
+UICompositeRenderScope::UICompositeRenderScope(const UIFrame& frame)
+    : m_frame(&frame)
+{
+    m_frame->beginCompositeRenderItem();
+}
+
+UICompositeRenderScope::~UICompositeRenderScope()
+{
+    m_frame->endCompositeRenderItem();
 }
 
 } // namespace Engine

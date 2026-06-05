@@ -43,6 +43,8 @@ public:
     VulkanTextRenderer& operator=(VulkanTextRenderer&&) = delete;
 
     void begin(const glm::uvec2& viewportSize) override;
+    void beginCompositeRenderItem(std::uint64_t renderOrder) override;
+    void endCompositeRenderItem() override;
     bool loadFont(std::string_view name, const std::filesystem::path& path, float pixelSize) override;
     void drawText(
         std::string_view text,
@@ -67,6 +69,8 @@ public:
     void end() override;
 
     void record(VkCommandBuffer commandBuffer) const;
+    void record(VkCommandBuffer commandBuffer, std::uint64_t renderOrder) const;
+    void appendRenderOrders(std::vector<std::uint64_t>& renderOrders) const;
 
 private:
     struct Glyph {
@@ -91,6 +95,7 @@ private:
 
     struct Batch {
         const Font* font{nullptr};
+        std::uint64_t renderOrder{0};
         UIClipRect clipRect;
         std::uint32_t firstVertex{0};
         std::uint32_t vertexCount{0};
@@ -102,6 +107,7 @@ private:
     void destroy();
     void destroyFont(Font& font);
     void uploadVertices();
+    [[nodiscard]] std::uint64_t currentRenderOrder() const;
     void createFontTexture(Font& font, const std::vector<std::uint8_t>& pixels, std::uint32_t width, std::uint32_t height);
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& memory);
     void createImage(std::uint32_t width, std::uint32_t height, VkImage& image, VkDeviceMemory& memory);
@@ -139,6 +145,8 @@ private:
     std::vector<Batch> m_batches;
     std::vector<UIClipRect> m_clipStack;
     std::unordered_map<std::string, Font> m_fonts;
+    std::uint64_t m_currentCompositeRenderOrder{0};
+    bool m_compositeRenderItemActive{false};
 };
 
 } // namespace Engine

@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstring>
 #include <fstream>
+#include <optional>
 #include <stdexcept>
 
 #include <glm/common.hpp>
@@ -14,6 +15,7 @@ namespace Engine {
 namespace {
 
 constexpr std::size_t VerticesPerQuad = 6;
+constexpr std::uint64_t UncompositedShapeRenderOrder = 0;
 
 bool sameClipRect(const UIClipRect& left, const UIClipRect& right)
 {
@@ -67,9 +69,28 @@ void VulkanRenderer2D::begin(const glm::uvec2& viewportSize)
     m_viewportSize = viewportSize;
     m_vertices.clear();
     m_sdfInstances.clear();
-    m_quadBatches.clear();
-    m_sdfBatches.clear();
+    m_drawCommands.clear();
     m_clipStack.clear();
+    m_nextRenderOrder = 1;
+    m_currentCompositeRenderOrder = 0;
+    m_compositeRenderItemActive = false;
+}
+
+std::uint64_t VulkanRenderer2D::reserveRenderOrder()
+{
+    return m_nextRenderOrder++;
+}
+
+void VulkanRenderer2D::beginCompositeRenderItem(const std::uint64_t renderOrder)
+{
+    m_currentCompositeRenderOrder = renderOrder;
+    m_compositeRenderItemActive = true;
+}
+
+void VulkanRenderer2D::endCompositeRenderItem()
+{
+    m_currentCompositeRenderOrder = 0;
+    m_compositeRenderItemActive = false;
 }
 
 void VulkanRenderer2D::drawQuad(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color)
@@ -86,18 +107,15 @@ void VulkanRenderer2D::drawQuad(const glm::vec2& position, const glm::vec2& size
     const glm::vec2 p1 = toNdc({position.x + size.x, position.y});
     const glm::vec2 p2 = toNdc({position.x + size.x, position.y + size.y});
     const glm::vec2 p3 = toNdc({position.x, position.y + size.y});
+    const std::uint32_t first = static_cast<std::uint32_t>(m_vertices.size());
 
     m_vertices.push_back({p0, color});
-    const UIClipRect clipRect = currentClipRect();
-    if (m_quadBatches.empty() || !sameClipRect(m_quadBatches.back().clipRect, clipRect)) {
-        m_quadBatches.push_back({clipRect, static_cast<std::uint32_t>(m_vertices.size() - 1), 0});
-    }
     m_vertices.push_back({p1, color});
     m_vertices.push_back({p2, color});
     m_vertices.push_back({p2, color});
     m_vertices.push_back({p3, color});
     m_vertices.push_back({p0, color});
-    m_quadBatches.back().count += static_cast<std::uint32_t>(VerticesPerQuad);
+    appendDrawCommand(DrawCommandType::Quad, currentClipRect(), first, static_cast<std::uint32_t>(VerticesPerQuad));
 }
 
 void VulkanRenderer2D::drawGradientQuad(
@@ -120,12 +138,7 @@ void VulkanRenderer2D::drawGradientQuad(
     const glm::vec2 p1 = toNdc({position.x + size.x, position.y});
     const glm::vec2 p2 = toNdc({position.x + size.x, position.y + size.y});
     const glm::vec2 p3 = toNdc({position.x, position.y + size.y});
-
-    const UIClipRect clipRect = currentClipRect();
-
-    if (m_quadBatches.empty() || !sameClipRect(m_quadBatches.back().clipRect, clipRect)) {
-        m_quadBatches.push_back({clipRect, static_cast<std::uint32_t>(m_vertices.size()), 0});
-    }
+    const std::uint32_t first = static_cast<std::uint32_t>(m_vertices.size());
 
     m_vertices.push_back({p0, topLeft});
     m_vertices.push_back({p1, topRight});
@@ -135,7 +148,7 @@ void VulkanRenderer2D::drawGradientQuad(
     m_vertices.push_back({p3, bottomLeft});
     m_vertices.push_back({p0, topLeft});
 
-    m_quadBatches.back().count += static_cast<std::uint32_t>(VerticesPerQuad);
+    appendDrawCommand(DrawCommandType::Quad, currentClipRect(), first, static_cast<std::uint32_t>(VerticesPerQuad));
 }
 
 void VulkanRenderer2D::drawRect(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color, const float thickness)
@@ -168,6 +181,7 @@ void VulkanRenderer2D::drawSdfRect(
         return;
     }
 
+    const std::uint32_t first = static_cast<std::uint32_t>(m_sdfInstances.size());
     m_sdfInstances.push_back({
         toNdc(position),
         {
@@ -180,11 +194,7 @@ void VulkanRenderer2D::drawSdfRect(
         radius,
         borderWidth,
     });
-    const UIClipRect clipRect = currentClipRect();
-    if (m_sdfBatches.empty() || !sameClipRect(m_sdfBatches.back().clipRect, clipRect)) {
-        m_sdfBatches.push_back({clipRect, static_cast<std::uint32_t>(m_sdfInstances.size() - 1), 0});
-    }
-    ++m_sdfBatches.back().count;
+    appendDrawCommand(DrawCommandType::SdfRect, currentClipRect(), first, 1);
 }
 
 void VulkanRenderer2D::pushClipRect(const UIClipRect& clipRect)
@@ -207,30 +217,58 @@ void VulkanRenderer2D::end()
 
 void VulkanRenderer2D::record(const VkCommandBuffer commandBuffer)
 {
-    if (m_vertices.empty() && m_sdfInstances.empty()) {
+    std::vector<std::uint64_t> renderOrders;
+    appendRenderOrders(renderOrders);
+    std::sort(renderOrders.begin(), renderOrders.end());
+    renderOrders.erase(std::unique(renderOrders.begin(), renderOrders.end()), renderOrders.end());
+
+    for (const std::uint64_t renderOrder : renderOrders) {
+        record(commandBuffer, renderOrder);
+    }
+}
+
+void VulkanRenderer2D::record(const VkCommandBuffer commandBuffer, const std::uint64_t renderOrder) const
+{
+    if (m_drawCommands.empty()) {
         return;
     }
 
     const VkDeviceSize offsets[] = {0};
+    const VkBuffer sdfBuffers[] = {m_sdfVertexBuffer, m_sdfInstanceBuffer};
+    const VkDeviceSize sdfOffsets[] = {0, 0};
     setViewportAndScissor(commandBuffer);
 
-    if (!m_vertices.empty()) {
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, &m_vertexBuffer, offsets);
-        for (const DrawBatch& batch : m_quadBatches) {
-            setScissor(commandBuffer, batch.clipRect);
-            vkCmdDraw(commandBuffer, batch.count, 1, batch.first, 0);
+    std::optional<DrawCommandType> boundType;
+    for (const DrawCommand& command : m_drawCommands) {
+        if (command.renderOrder != renderOrder || command.count == 0) {
+            continue;
+        }
+
+        if (!boundType || *boundType != command.type) {
+            if (command.type == DrawCommandType::Quad) {
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
+                vkCmdBindVertexBuffers(commandBuffer, 0, 1, &m_vertexBuffer, offsets);
+            } else {
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_sdfPipeline);
+                vkCmdBindVertexBuffers(commandBuffer, 0, 2, sdfBuffers, sdfOffsets);
+            }
+            boundType = command.type;
+        }
+
+        setScissor(commandBuffer, command.clipRect);
+        if (command.type == DrawCommandType::Quad) {
+            vkCmdDraw(commandBuffer, command.count, 1, command.first, 0);
+        } else {
+            vkCmdDraw(commandBuffer, static_cast<std::uint32_t>(VerticesPerQuad), command.count, 0, command.first);
         }
     }
+}
 
-    if (!m_sdfInstances.empty()) {
-        const VkBuffer sdfBuffers[] = {m_sdfVertexBuffer, m_sdfInstanceBuffer};
-        const VkDeviceSize sdfOffsets[] = {0, 0};
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_sdfPipeline);
-        vkCmdBindVertexBuffers(commandBuffer, 0, 2, sdfBuffers, sdfOffsets);
-        for (const DrawBatch& batch : m_sdfBatches) {
-            setScissor(commandBuffer, batch.clipRect);
-            vkCmdDraw(commandBuffer, static_cast<std::uint32_t>(VerticesPerQuad), batch.count, 0, batch.first);
+void VulkanRenderer2D::appendRenderOrders(std::vector<std::uint64_t>& renderOrders) const
+{
+    for (const DrawCommand& command : m_drawCommands) {
+        if (command.count > 0) {
+            renderOrders.push_back(command.renderOrder);
         }
     }
 }
@@ -243,6 +281,32 @@ std::size_t VulkanRenderer2D::quadCount() const
 std::size_t VulkanRenderer2D::maxQuads() const
 {
     return m_maxQuads;
+}
+
+void VulkanRenderer2D::appendDrawCommand(
+    const DrawCommandType type,
+    const UIClipRect clipRect,
+    const std::uint32_t first,
+    const std::uint32_t count)
+{
+    const std::uint64_t renderOrder = currentRenderOrder();
+    if (!m_drawCommands.empty()) {
+        DrawCommand& previous = m_drawCommands.back();
+        if (previous.type == type &&
+            previous.renderOrder == renderOrder &&
+            sameClipRect(previous.clipRect, clipRect) &&
+            previous.first + previous.count == first) {
+            previous.count += count;
+            return;
+        }
+    }
+
+    m_drawCommands.push_back({type, renderOrder, clipRect, first, count});
+}
+
+std::uint64_t VulkanRenderer2D::currentRenderOrder()
+{
+    return m_compositeRenderItemActive ? m_currentCompositeRenderOrder : UncompositedShapeRenderOrder;
 }
 
 void VulkanRenderer2D::createPipeline(const VkRenderPass renderPass)
