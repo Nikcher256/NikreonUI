@@ -80,6 +80,9 @@ public:
     void popClipRect();
     [[nodiscard]] bool isHot(std::string_view id) const;
     [[nodiscard]] bool isActive(std::string_view id) const;
+    [[nodiscard]] bool hasHotItem() const;
+    [[nodiscard]] bool hasActiveItem() const;
+    [[nodiscard]] bool baseInputBlocked() const;
 
 private:
     [[nodiscard]] bool contains(const glm::vec2& position, const glm::vec2& size) const;

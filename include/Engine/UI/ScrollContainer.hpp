@@ -18,6 +18,7 @@ struct UIStyle;
 class ScrollContainer {
 public:
     void setBounds(const UIClipRect& bounds);
+    void setScrollbarRightEdge(float rightEdge);
     void setContentHeight(float contentHeight);
     void setWheelStep(float wheelStep);
     explicit ScrollContainer(std::string id = "scroll");
@@ -52,6 +53,7 @@ private:
 
     std::string m_id;
     UIClipRect m_bounds;
+    float m_scrollbarRightEdge{-1.0f};
     float m_contentHeight{0.0f};
     float m_offset{0.0f};
     float m_wheelStep{32.0f};

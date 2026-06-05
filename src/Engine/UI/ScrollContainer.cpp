@@ -21,6 +21,11 @@ void ScrollContainer::setBounds(const UIClipRect& bounds)
     clampOffset();
 }
 
+void ScrollContainer::setScrollbarRightEdge(const float rightEdge)
+{
+    m_scrollbarRightEdge = rightEdge;
+}
+
 void ScrollContainer::setContentHeight(const float contentHeight)
 {
     m_contentHeight = std::max(contentHeight, 0.0f);
@@ -99,7 +104,10 @@ void ScrollContainer::renderScrollbar(Renderer2D& renderer2D, const UIStyle& sty
     }
 
     const UIClipRect thumb = thumbBounds(style.scrollbar.width, style.scrollbar.minimumThumbLength);
-    renderer2D.drawSdfRect(m_bounds.position + glm::vec2{m_bounds.size.x - style.scrollbar.width, 0.0f}, {style.scrollbar.width, m_bounds.size.y}, style.scrollbar.width * 0.5f, style.scrollbar.track, style.scrollbar.track, 0.0f);
+    const float scrollbarX = m_scrollbarRightEdge >= 0.0f
+        ? m_scrollbarRightEdge - style.scrollbar.width
+        : m_bounds.position.x + m_bounds.size.x - style.scrollbar.width;
+    renderer2D.drawSdfRect({scrollbarX, m_bounds.position.y}, {style.scrollbar.width, m_bounds.size.y}, style.scrollbar.width * 0.5f, style.scrollbar.track, style.scrollbar.track, 0.0f);
     renderer2D.drawSdfRect(
         thumb.position,
         thumb.size,
@@ -166,7 +174,10 @@ UIClipRect ScrollContainer::thumbBounds(const float width, const float minimumTh
     const float thumbY = maxOffset() > 0.0f
         ? m_bounds.position.y + travel * (m_offset / maxOffset())
         : m_bounds.position.y;
-    return {{m_bounds.position.x + m_bounds.size.x - width, thumbY}, {width, thumbHeight}};
+    const float thumbX = m_scrollbarRightEdge >= 0.0f
+        ? m_scrollbarRightEdge - width
+        : m_bounds.position.x + m_bounds.size.x - width;
+    return {{thumbX, thumbY}, {width, thumbHeight}};
 }
 
 } // namespace Engine

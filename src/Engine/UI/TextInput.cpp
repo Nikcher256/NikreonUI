@@ -353,6 +353,10 @@ void TextInput::renderText(
 
 void TextInput::setValue(std::string value)
 {
+    if (m_value == value) {
+        return;
+    }
+
     m_value = std::move(value);
     m_caretIndex = std::min(m_caretIndex, m_value.size());
     m_selectionAnchor = m_caretIndex;

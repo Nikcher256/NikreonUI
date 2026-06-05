@@ -61,12 +61,17 @@ void FilePathInput::render(const UIFrame& frame) const
     }
 
     render(frame.shapes(), frame.style());
-    m_input.renderText(frame.text(), frame.style(), "default", 1.0f);
+    const UITextStyle& inputStyle = frame.style().resolveText(m_input.value().empty() ? "input-placeholder" : "input-value");
+    m_input.renderText(frame.text(), frame.style(), inputStyle.font, inputStyle.scale);
     frame.drawText(m_buttonLabel, {m_browseButton.position(), m_browseButton.size()}, frame.style().resolveText("toolbar-toggle"));
 }
 
 void FilePathInput::setValue(std::string value)
 {
+    if (m_input.value() == value) {
+        return;
+    }
+
     m_input.setValue(std::move(value));
     if (m_keepPathEndVisible) {
         m_input.moveCaretToEnd();

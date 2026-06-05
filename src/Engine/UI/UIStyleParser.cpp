@@ -68,6 +68,25 @@ bool parseFloats(const std::string_view text, const std::size_t expectedCount, s
     return values.size() == expectedCount && remainder.empty();
 }
 
+bool parseFloatList(const std::string_view text, std::vector<float>& values)
+{
+    std::string normalized{text};
+    std::replace(normalized.begin(), normalized.end(), ',', ' ');
+
+    std::istringstream stream(normalized);
+    values.clear();
+
+    float value = 0.0f;
+    while (stream >> value) {
+        values.push_back(value);
+    }
+
+    stream.clear();
+    std::string remainder;
+    stream >> remainder;
+    return !values.empty() && remainder.empty();
+}
+
 bool parseFloat(const std::string_view text, float& value)
 {
     std::vector<float> values;
@@ -114,6 +133,104 @@ bool parseVec4(const std::string_view text, glm::vec4& value)
     return true;
 }
 
+bool parseInt(const std::string_view text, int& value)
+{
+    float parsed = 0.0f;
+    if (!parseFloat(text, parsed)) {
+        return false;
+    }
+
+    value = static_cast<int>(parsed);
+    return true;
+}
+
+bool parseInsets(const std::string_view text, UIEdgeInsets& value)
+{
+    std::vector<float> values;
+    if (!parseFloatList(text, values)) {
+        return false;
+    }
+
+    if (values.size() == 1) {
+        value = UIEdgeInsets::all(values[0]);
+        return true;
+    }
+    if (values.size() == 2) {
+        value = UIEdgeInsets::symmetric(values[0], values[1]);
+        return true;
+    }
+    if (values.size() == 4) {
+        value = {values[0], values[1], values[2], values[3]};
+        return true;
+    }
+
+    return false;
+}
+
+bool parseHorizontalAlignment(const std::string_view value, UITextHorizontalAlignment& alignment)
+{
+    if (value == "left" || value == "start") {
+        alignment = UITextHorizontalAlignment::Left;
+        return true;
+    }
+    if (value == "center") {
+        alignment = UITextHorizontalAlignment::Center;
+        return true;
+    }
+    if (value == "right" || value == "end") {
+        alignment = UITextHorizontalAlignment::Right;
+        return true;
+    }
+    return false;
+}
+
+bool parseVerticalAlignment(const std::string_view value, UITextVerticalAlignment& alignment)
+{
+    if (value == "top" || value == "start") {
+        alignment = UITextVerticalAlignment::Top;
+        return true;
+    }
+    if (value == "center") {
+        alignment = UITextVerticalAlignment::Center;
+        return true;
+    }
+    if (value == "bottom" || value == "end") {
+        alignment = UITextVerticalAlignment::Bottom;
+        return true;
+    }
+    return false;
+}
+
+bool parseWrap(const std::string_view value, UITextWrap& wrap)
+{
+    if (value == "none" || value == "false" || value == "nowrap") {
+        wrap = UITextWrap::None;
+        return true;
+    }
+    if (value == "word" || value == "true" || value == "wrap") {
+        wrap = UITextWrap::Word;
+        return true;
+    }
+    return false;
+}
+
+bool parseOverflow(const std::string_view value, UIOverflow& overflow)
+{
+    if (value == "visible") {
+        overflow = UIOverflow::Visible;
+        return true;
+    }
+    if (value == "clip" || value == "hidden") {
+        overflow = UIOverflow::Clip;
+        return true;
+    }
+    if (value == "ellipsis") {
+        overflow = UIOverflow::Ellipsis;
+        return true;
+    }
+    return false;
+}
+
 bool applyBoxProperty(UIBoxStyle& box, const std::string_view property, const std::string_view value)
 {
     if (property == "fill") {
@@ -129,7 +246,15 @@ bool applyBoxProperty(UIBoxStyle& box, const std::string_view property, const st
         return parseFloat(value, box.borderRadius);
     }
     if (property == "padding") {
-        return parseVec2(value, box.padding);
+        UIEdgeInsets padding;
+        if (!parseInsets(value, padding)) {
+            return false;
+        }
+        box.padding = {
+            (padding.left + padding.right) * 0.5f,
+            (padding.top + padding.bottom) * 0.5f,
+        };
+        return true;
     }
 
     return false;
@@ -262,6 +387,163 @@ UITextStyle& resolveText(UIStyle& style, const std::string& styleClass, const st
     return style.textClasses.try_emplace(styleClass, style.text).first->second;
 }
 
+UIStyleRule& resolveElementRule(UIStyle& style, const StyleSelector& selector)
+{
+    if (!selector.id.empty()) {
+        return style.elementIdRules[selector.id];
+    }
+    if (!selector.styleClass.empty()) {
+        return style.elementClassRules[selector.styleClass];
+    }
+    return style.elementTypeRules[selector.type];
+}
+
+bool applyElementProperty(UIStyleRule& rule, const std::string_view property, const std::string_view value)
+{
+    if (property == "padding") {
+        UIEdgeInsets padding;
+        if (!parseInsets(value, padding)) {
+            return false;
+        }
+        rule.padding = padding;
+        return true;
+    }
+    if (property == "gap") {
+        float gap = 0.0f;
+        if (!parseFloat(value, gap)) {
+            return false;
+        }
+        rule.gap = gap;
+        return true;
+    }
+    if (property == "color") {
+        glm::vec4 color;
+        if (!parseVec4(value, color)) {
+            return false;
+        }
+        rule.color = color;
+        return true;
+    }
+    if (property == "fill" || property == "background" || property == "background-color") {
+        glm::vec4 background;
+        if (!parseVec4(value, background)) {
+            return false;
+        }
+        rule.background = background;
+        return true;
+    }
+    if (property == "border") {
+        std::vector<float> values;
+        if (!parseFloatList(value, values)) {
+            return false;
+        }
+        if (values.size() == 1) {
+            rule.borderWidth = values[0];
+            return true;
+        }
+        if (values.size() == 4) {
+            rule.border = {values[0], values[1], values[2], values[3]};
+            return true;
+        }
+        if (values.size() == 5) {
+            rule.borderWidth = values[0];
+            rule.border = {values[1], values[2], values[3], values[4]};
+            return true;
+        }
+        return false;
+    }
+    if (property == "border-color") {
+        glm::vec4 border;
+        if (!parseVec4(value, border)) {
+            return false;
+        }
+        rule.border = border;
+        return true;
+    }
+    if (property == "border-width") {
+        float width = 0.0f;
+        if (!parseFloat(value, width)) {
+            return false;
+        }
+        rule.borderWidth = width;
+        return true;
+    }
+    if (property == "border-radius") {
+        float radius = 0.0f;
+        if (!parseFloat(value, radius)) {
+            return false;
+        }
+        rule.borderRadius = radius;
+        return true;
+    }
+    if (property == "font") {
+        const std::string font = trim(value);
+        if (font.empty()) {
+            return false;
+        }
+        rule.font = font;
+        return true;
+    }
+    if (property == "font-size" || property == "font-scale") {
+        float fontSize = 0.0f;
+        if (!parseFloat(value, fontSize)) {
+            return false;
+        }
+        rule.fontSize = fontSize;
+        return true;
+    }
+    if (property == "horizontal-align" || property == "text-align") {
+        UITextHorizontalAlignment alignment;
+        if (!parseHorizontalAlignment(value, alignment)) {
+            return false;
+        }
+        rule.horizontalAlignment = alignment;
+        return true;
+    }
+    if (property == "vertical-align") {
+        UITextVerticalAlignment alignment;
+        if (!parseVerticalAlignment(value, alignment)) {
+            return false;
+        }
+        rule.verticalAlignment = alignment;
+        return true;
+    }
+    if (property == "wrap") {
+        UITextWrap wrap;
+        if (!parseWrap(value, wrap)) {
+            return false;
+        }
+        rule.wrap = wrap;
+        return true;
+    }
+    if (property == "overflow") {
+        UIOverflow overflow;
+        if (!parseOverflow(value, overflow)) {
+            return false;
+        }
+        rule.overflow = overflow;
+        return true;
+    }
+    if (property == "max-lines") {
+        int maxLines = 0;
+        if (!parseInt(value, maxLines)) {
+            return false;
+        }
+        rule.maxLines = maxLines;
+        return true;
+    }
+    if (property == "opacity") {
+        float opacity = 0.0f;
+        if (!parseFloat(value, opacity)) {
+            return false;
+        }
+        rule.opacity = opacity;
+        return true;
+    }
+
+    return false;
+}
+
 bool applyButtonProperty(UIButtonStyle& button, const std::string_view property, const std::string_view value)
 {
     if (applyBoxProperty(button.normal, property, value)) {
@@ -388,7 +670,7 @@ bool applyTextProperty(UITextStyle& text, const std::string_view property, const
         text.font = trim(value);
         return !text.font.empty();
     }
-    if (property == "font-scale") {
+    if (property == "font-scale" || property == "font-size") {
         return parseFloat(value, text.scale);
     }
     if (property == "opacity") {
@@ -397,35 +679,20 @@ bool applyTextProperty(UITextStyle& text, const std::string_view property, const
     if (property == "offset") {
         return parseVec2(value, text.offset);
     }
-    if (property == "text-align") {
-        if (value == "left") {
-            text.horizontalAlignment = UITextHorizontalAlignment::Left;
-            return true;
-        }
-        if (value == "center") {
-            text.horizontalAlignment = UITextHorizontalAlignment::Center;
-            return true;
-        }
-        if (value == "right") {
-            text.horizontalAlignment = UITextHorizontalAlignment::Right;
-            return true;
-        }
-        return false;
+    if (property == "text-align" || property == "horizontal-align") {
+        return parseHorizontalAlignment(value, text.horizontalAlignment);
     }
     if (property == "vertical-align") {
-        if (value == "top") {
-            text.verticalAlignment = UITextVerticalAlignment::Top;
-            return true;
-        }
-        if (value == "center") {
-            text.verticalAlignment = UITextVerticalAlignment::Center;
-            return true;
-        }
-        if (value == "bottom") {
-            text.verticalAlignment = UITextVerticalAlignment::Bottom;
-            return true;
-        }
-        return false;
+        return parseVerticalAlignment(value, text.verticalAlignment);
+    }
+    if (property == "wrap") {
+        return parseWrap(value, text.wrap);
+    }
+    if (property == "overflow") {
+        return parseOverflow(value, text.overflow);
+    }
+    if (property == "max-lines") {
+        return parseInt(value, text.maxLines);
     }
 
     return false;
@@ -433,7 +700,7 @@ bool applyTextProperty(UITextStyle& text, const std::string_view property, const
 
 bool applyGlobalProperty(UIStyle& style, const std::string_view property, const std::string_view value)
 {
-    if (property == "spacing") {
+    if (property == "spacing" || property == "gap") {
         return parseFloat(value, style.gap);
     }
     return false;
@@ -444,35 +711,43 @@ bool applyProperty(UIStyle& style, const std::string_view selector, const std::s
     if (selector == "ui") {
         return applyGlobalProperty(style, property, value);
     }
-    if (selector == "panel") {
-        return applyBoxProperty(style.panel, property, value);
-    }
-    if (selector == "field") {
-        return applyBoxProperty(style.field, property, value);
-    }
 
     const StyleSelector parsed = parseSelector(selector);
+    const auto applyGeneric = [&]() {
+        return applyElementProperty(resolveElementRule(style, parsed), property, value);
+    };
+    const auto applyBoth = [&](const bool specializedApplied) {
+        const bool genericApplied = applyGeneric();
+        return specializedApplied || genericApplied;
+    };
+
+    if (selector == "panel") {
+        return applyBoth(applyBoxProperty(style.panel, property, value));
+    }
+    if (selector == "field") {
+        return applyBoth(applyBoxProperty(style.field, property, value));
+    }
 
     if (parsed.type == "button") {
-        return applyButtonProperty(resolveButton(style, parsed.styleClass, parsed.id), property, value);
+        return applyBoth(applyButtonProperty(resolveButton(style, parsed.styleClass, parsed.id), property, value));
     }
     if (parsed.type == "checkbox") {
-        return applyCheckboxProperty(resolveCheckbox(style, parsed.styleClass, parsed.id), property, value);
+        return applyBoth(applyCheckboxProperty(resolveCheckbox(style, parsed.styleClass, parsed.id), property, value));
     }
     if (parsed.type == "slider") {
-        return applySliderProperty(resolveSlider(style, parsed.styleClass, parsed.id), property, value);
+        return applyBoth(applySliderProperty(resolveSlider(style, parsed.styleClass, parsed.id), property, value));
     }
     if (parsed.type == "number-input") {
-        return applyNumberInputProperty(resolveNumberInput(style, parsed.styleClass, parsed.id), property, value);
+        return applyBoth(applyNumberInputProperty(resolveNumberInput(style, parsed.styleClass, parsed.id), property, value));
     }
     if (parsed.type == "text-input") {
-        return applyTextInputProperty(resolveTextInput(style, parsed.styleClass, parsed.id), property, value);
+        return applyBoth(applyTextInputProperty(resolveTextInput(style, parsed.styleClass, parsed.id), property, value));
     }
     if (parsed.type == "text") {
-        return applyTextProperty(resolveText(style, parsed.styleClass, parsed.id), property, value);
+        return applyBoth(applyTextProperty(resolveText(style, parsed.styleClass, parsed.id), property, value));
     }
 
-    return false;
+    return applyGeneric();
 }
 
 bool parseRule(UIStyle& style, const std::string_view selectorText, const std::string_view body, std::string& error)

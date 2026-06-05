@@ -17,14 +17,17 @@ add_library(NikreonUICore STATIC
     src/Engine/UI/Button.cpp
     src/Engine/UI/Checkbox.cpp
     src/Engine/UI/ColorPicker.cpp
+    src/Engine/UI/Dropdown.cpp
     src/Engine/UI/FilePathInput.cpp
     src/Engine/UI/Layout.cpp
     src/Engine/UI/NumberInput.cpp
     src/Engine/UI/ScrollContainer.cpp
     src/Engine/UI/Slider.cpp
     src/Engine/UI/TextInput.cpp
+    src/Engine/UI/UIBuilder.cpp
     src/Engine/UI/UIContext.cpp
     src/Engine/UI/UIFrame.cpp
+    src/Engine/UI/UIRenderQueue.cpp
     src/Engine/UI/UIStyleParser.cpp
     src/Engine/UI/Widget.cpp
 )

@@ -31,7 +31,7 @@ public:
     [[nodiscard]] UIClipRect toScreen(const UIClipRect& localRect) const;
 
     void drawBox(const UIClipRect& bounds, const UIBoxStyle& box) const;
-    void drawText(std::string_view value, const UIClipRect& bounds, const UITextStyle& textStyle) const;
+    bool drawText(std::string_view value, const UIClipRect& bounds, const UITextStyle& textStyle) const;
     void pushClip(const UIClipRect& bounds) const;
     void popClip() const;
 

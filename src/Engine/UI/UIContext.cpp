@@ -228,6 +228,21 @@ bool UIContext::isActive(const std::string_view id) const
     return m_activeId == id;
 }
 
+bool UIContext::hasHotItem() const
+{
+    return !m_hotId.empty();
+}
+
+bool UIContext::hasActiveItem() const
+{
+    return !m_activeId.empty();
+}
+
+bool UIContext::baseInputBlocked() const
+{
+    return topInputLayer() != nullptr || hasHotItem() || hasActiveItem();
+}
+
 bool UIContext::rawContains(const glm::vec2& position, const glm::vec2& size) const
 {
     return m_mousePosition.x >= position.x &&

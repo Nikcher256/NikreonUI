@@ -1,9 +1,12 @@
 #include "Engine/UI/BasicWidgets.hpp"
 #include "Engine/UI/ColorPicker.hpp"
 #include "Engine/UI/ScrollContainer.hpp"
+#include "Engine/UI/UIRenderQueue.hpp"
+#include "Engine/UI/UIStyleParser.hpp"
 
 #include <cassert>
 #include <memory>
+#include <vector>
 
 int main()
 {
@@ -59,4 +62,56 @@ int main()
     assert(popupClick.pressed);
     layeredContext.popLayer();
     layeredContext.endFrame();
+
+    Engine::UIRenderQueue renderQueue;
+    std::vector<int> renderOrder;
+    renderQueue.add(Engine::UIRenderLayer::Popup, [&renderOrder]() { renderOrder.push_back(3); });
+    renderQueue.add(Engine::UIRenderLayer::Content, [&renderOrder]() { renderOrder.push_back(1); });
+    renderQueue.add(Engine::UIRenderLayer::Content, [&renderOrder]() { renderOrder.push_back(2); });
+    renderQueue.flush();
+    assert((renderOrder == std::vector<int>{1, 2, 3}));
+
+    Engine::UIStyle parsedStyle;
+    std::string styleError;
+    const bool parsed = Engine::UIStyleParser::parse(R"(
+        button {
+            padding: 4, 5, 6, 7;
+            gap: 3;
+            color: 0.1, 0.2, 0.3, 0.4;
+            border: 2, 0.5, 0.6, 0.7, 0.8;
+            border-radius: 5;
+            font-size: 0.75;
+            horizontal-align: center;
+            vertical-align: bottom;
+            wrap: word;
+            overflow: clip;
+            max-lines: 2;
+            opacity: 0.5;
+        }
+        .toolbar {
+            gap: 9;
+        }
+        #special {
+            opacity: 0.25;
+        }
+    )", parsedStyle, styleError);
+    assert(parsed);
+    assert(styleError.empty());
+    const Engine::UIComputedStyle buttonStyle = parsedStyle.resolveElement("button");
+    assert(buttonStyle.padding.left == 4.0f);
+    assert(buttonStyle.padding.top == 5.0f);
+    assert(buttonStyle.padding.right == 6.0f);
+    assert(buttonStyle.padding.bottom == 7.0f);
+    assert(buttonStyle.gap == 3.0f);
+    assert(buttonStyle.borderWidth == 2.0f);
+    assert(buttonStyle.borderRadius == 5.0f);
+    assert(buttonStyle.fontSize == 0.75f);
+    assert(buttonStyle.horizontalAlignment == Engine::UITextHorizontalAlignment::Center);
+    assert(buttonStyle.verticalAlignment == Engine::UITextVerticalAlignment::Bottom);
+    assert(buttonStyle.wrap == Engine::UITextWrap::Word);
+    assert(buttonStyle.overflow == Engine::UIOverflow::Clip);
+    assert(buttonStyle.maxLines == 2);
+    assert(buttonStyle.opacity == 0.5f);
+    assert(parsedStyle.resolveElement("button", "toolbar").gap == 9.0f);
+    assert(parsedStyle.resolveElement("button", "toolbar", "special").opacity == 0.25f);
 }
