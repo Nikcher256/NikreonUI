@@ -45,14 +45,20 @@ void checkVk(const VkResult result, const char* message)
 VulkanRenderer2D::VulkanRenderer2D(
     VkDevice device,
     VkPhysicalDevice physicalDevice,
+    VkQueue graphicsQueue,
+    VkCommandPool commandPool,
     VkRenderPass renderPass,
     const std::size_t maxQuads)
     : m_device(device)
     , m_physicalDevice(physicalDevice)
+    , m_graphicsQueue(graphicsQueue)
+    , m_commandPool(commandPool)
     , m_maxQuads(maxQuads)
 {
     m_vertices.reserve(m_maxQuads * VerticesPerQuad);
     m_sdfInstances.reserve(m_maxQuads);
+    createDescriptorResources();
+    createFallbackTexture();
     createVertexBuffer();
     createSdfBuffers();
     createPipeline(renderPass);
@@ -109,13 +115,13 @@ void VulkanRenderer2D::drawQuad(const glm::vec2& position, const glm::vec2& size
     const glm::vec2 p3 = toNdc({position.x, position.y + size.y});
     const std::uint32_t first = static_cast<std::uint32_t>(m_vertices.size());
 
-    m_vertices.push_back({p0, color});
-    m_vertices.push_back({p1, color});
-    m_vertices.push_back({p2, color});
-    m_vertices.push_back({p2, color});
-    m_vertices.push_back({p3, color});
-    m_vertices.push_back({p0, color});
-    appendDrawCommand(DrawCommandType::Quad, currentClipRect(), first, static_cast<std::uint32_t>(VerticesPerQuad));
+    m_vertices.push_back({p0, color, {0.0f, 0.0f}});
+    m_vertices.push_back({p1, color, {1.0f, 0.0f}});
+    m_vertices.push_back({p2, color, {1.0f, 1.0f}});
+    m_vertices.push_back({p2, color, {1.0f, 1.0f}});
+    m_vertices.push_back({p3, color, {0.0f, 1.0f}});
+    m_vertices.push_back({p0, color, {0.0f, 0.0f}});
+    appendDrawCommand(DrawCommandType::Quad, currentClipRect(), first, static_cast<std::uint32_t>(VerticesPerQuad), m_fallbackTexture.descriptorSet);
 }
 
 void VulkanRenderer2D::drawGradientQuad(
@@ -140,15 +146,64 @@ void VulkanRenderer2D::drawGradientQuad(
     const glm::vec2 p3 = toNdc({position.x, position.y + size.y});
     const std::uint32_t first = static_cast<std::uint32_t>(m_vertices.size());
 
-    m_vertices.push_back({p0, topLeft});
-    m_vertices.push_back({p1, topRight});
-    m_vertices.push_back({p2, bottomRight});
+    m_vertices.push_back({p0, topLeft, {0.0f, 0.0f}});
+    m_vertices.push_back({p1, topRight, {1.0f, 0.0f}});
+    m_vertices.push_back({p2, bottomRight, {1.0f, 1.0f}});
 
-    m_vertices.push_back({p2, bottomRight});
-    m_vertices.push_back({p3, bottomLeft});
-    m_vertices.push_back({p0, topLeft});
+    m_vertices.push_back({p2, bottomRight, {1.0f, 1.0f}});
+    m_vertices.push_back({p3, bottomLeft, {0.0f, 1.0f}});
+    m_vertices.push_back({p0, topLeft, {0.0f, 0.0f}});
 
-    appendDrawCommand(DrawCommandType::Quad, currentClipRect(), first, static_cast<std::uint32_t>(VerticesPerQuad));
+    appendDrawCommand(DrawCommandType::Quad, currentClipRect(), first, static_cast<std::uint32_t>(VerticesPerQuad), m_fallbackTexture.descriptorSet);
+}
+
+void VulkanRenderer2D::drawImage(
+    const UITextureId texture,
+    const glm::vec2& position,
+    const glm::vec2& size,
+    const glm::vec2& uvMinimum,
+    const glm::vec2& uvMaximum,
+    const glm::vec4& tint)
+{
+    if (size.x <= 0.0f || size.y <= 0.0f || tint.a <= 0.0f) {
+        return;
+    }
+
+    if (m_vertices.size() + VerticesPerQuad > m_maxQuads * VerticesPerQuad) {
+        return;
+    }
+
+    const glm::vec2 p0 = toNdc(position);
+    const glm::vec2 p1 = toNdc({position.x + size.x, position.y});
+    const glm::vec2 p2 = toNdc({position.x + size.x, position.y + size.y});
+    const glm::vec2 p3 = toNdc({position.x, position.y + size.y});
+    const std::uint32_t first = static_cast<std::uint32_t>(m_vertices.size());
+
+    m_vertices.push_back({p0, tint, {uvMinimum.x, uvMinimum.y}});
+    m_vertices.push_back({p1, tint, {uvMaximum.x, uvMinimum.y}});
+    m_vertices.push_back({p2, tint, {uvMaximum.x, uvMaximum.y}});
+    m_vertices.push_back({p2, tint, {uvMaximum.x, uvMaximum.y}});
+    m_vertices.push_back({p3, tint, {uvMinimum.x, uvMaximum.y}});
+    m_vertices.push_back({p0, tint, {uvMinimum.x, uvMinimum.y}});
+    appendDrawCommand(DrawCommandType::Quad, currentClipRect(), first, static_cast<std::uint32_t>(VerticesPerQuad), descriptorSetForTexture(texture));
+}
+
+void VulkanRenderer2D::uploadImage(
+    const UITextureId texture,
+    const std::uint32_t width,
+    const std::uint32_t height,
+    const std::uint8_t* rgba8,
+    const std::size_t byteCount)
+{
+    if (texture == 0 || width == 0U || height == 0U || rgba8 == nullptr || byteCount < static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4U) {
+        return;
+    }
+
+    if (m_textures.find(texture) != m_textures.end()) {
+        return;
+    }
+
+    m_textures.emplace(texture, createTextureResource(width, height, rgba8, byteCount));
 }
 
 void VulkanRenderer2D::drawRect(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color, const float thickness)
@@ -257,6 +312,16 @@ void VulkanRenderer2D::record(const VkCommandBuffer commandBuffer, const std::ui
 
         setScissor(commandBuffer, command.clipRect);
         if (command.type == DrawCommandType::Quad) {
+            const VkDescriptorSet descriptorSet = command.descriptorSet != VK_NULL_HANDLE ? command.descriptorSet : m_fallbackTexture.descriptorSet;
+            vkCmdBindDescriptorSets(
+                commandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                m_pipelineLayout,
+                0,
+                1,
+                &descriptorSet,
+                0,
+                nullptr);
             vkCmdDraw(commandBuffer, command.count, 1, command.first, 0);
         } else {
             vkCmdDraw(commandBuffer, static_cast<std::uint32_t>(VerticesPerQuad), command.count, 0, command.first);
@@ -287,7 +352,8 @@ void VulkanRenderer2D::appendDrawCommand(
     const DrawCommandType type,
     const UIClipRect clipRect,
     const std::uint32_t first,
-    const std::uint32_t count)
+    const std::uint32_t count,
+    const VkDescriptorSet descriptorSet)
 {
     const std::uint64_t renderOrder = currentRenderOrder();
     if (!m_drawCommands.empty()) {
@@ -295,18 +361,29 @@ void VulkanRenderer2D::appendDrawCommand(
         if (previous.type == type &&
             previous.renderOrder == renderOrder &&
             sameClipRect(previous.clipRect, clipRect) &&
-            previous.first + previous.count == first) {
+            previous.first + previous.count == first &&
+            previous.descriptorSet == descriptorSet) {
             previous.count += count;
             return;
         }
     }
 
-    m_drawCommands.push_back({type, renderOrder, clipRect, first, count});
+    m_drawCommands.push_back({type, renderOrder, clipRect, first, count, descriptorSet});
 }
 
 std::uint64_t VulkanRenderer2D::currentRenderOrder()
 {
     return m_compositeRenderItemActive ? m_currentCompositeRenderOrder : UncompositedShapeRenderOrder;
+}
+
+VkDescriptorSet VulkanRenderer2D::descriptorSetForTexture(const UITextureId texture) const
+{
+    const auto found = m_textures.find(texture);
+    if (found != m_textures.end() && found->second.descriptorSet != VK_NULL_HANDLE) {
+        return found->second.descriptorSet;
+    }
+
+    return m_fallbackTexture.descriptorSet;
 }
 
 void VulkanRenderer2D::createPipeline(const VkRenderPass renderPass)
@@ -397,6 +474,8 @@ void VulkanRenderer2D::createPipeline(const VkRenderPass renderPass)
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
     checkVk(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout), "Failed to create Renderer2D pipeline layout.");
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -532,6 +611,38 @@ void VulkanRenderer2D::createSdfPipeline(const VkRenderPass renderPass)
     vkDestroyShaderModule(m_device, vertexShaderModule, nullptr);
 }
 
+void VulkanRenderer2D::createDescriptorResources()
+{
+    VkDescriptorSetLayoutBinding textureBinding{};
+    textureBinding.binding = 0;
+    textureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    textureBinding.descriptorCount = 1;
+    textureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 1;
+    layoutInfo.pBindings = &textureBinding;
+    checkVk(vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_descriptorSetLayout), "Failed to create Renderer2D descriptor set layout.");
+
+    VkDescriptorPoolSize poolSize{};
+    poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSize.descriptorCount = 512U;
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.maxSets = 512U;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &poolSize;
+    checkVk(vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool), "Failed to create Renderer2D descriptor pool.");
+}
+
+void VulkanRenderer2D::createFallbackTexture()
+{
+    const std::array<std::uint8_t, 4> whitePixel = {255U, 255U, 255U, 255U};
+    m_fallbackTexture = createTextureResource(1U, 1U, whitePixel.data(), whitePixel.size());
+}
+
 void VulkanRenderer2D::createVertexBuffer()
 {
     m_vertexBufferSize = static_cast<VkDeviceSize>(m_maxQuads * VerticesPerQuad * sizeof(Vertex));
@@ -583,6 +694,219 @@ void VulkanRenderer2D::createBuffer(const VkDeviceSize size, const VkBufferUsage
     checkVk(vkBindBufferMemory(m_device, buffer, memory, 0), "Failed to bind Renderer2D buffer memory.");
 }
 
+void VulkanRenderer2D::createDeviceBuffer(
+    const VkDeviceSize size,
+    const VkBufferUsageFlags usage,
+    const VkMemoryPropertyFlags properties,
+    VkBuffer& buffer,
+    VkDeviceMemory& memory)
+{
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    checkVk(vkCreateBuffer(m_device, &bufferInfo, nullptr, &buffer), "Failed to create Renderer2D device buffer.");
+
+    VkMemoryRequirements memoryRequirements{};
+    vkGetBufferMemoryRequirements(m_device, buffer, &memoryRequirements);
+
+    VkMemoryAllocateInfo allocateInfo{};
+    allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocateInfo.allocationSize = memoryRequirements.size;
+    allocateInfo.memoryTypeIndex = findMemoryType(memoryRequirements.memoryTypeBits, properties);
+
+    checkVk(vkAllocateMemory(m_device, &allocateInfo, nullptr, &memory), "Failed to allocate Renderer2D device buffer memory.");
+    checkVk(vkBindBufferMemory(m_device, buffer, memory, 0), "Failed to bind Renderer2D device buffer memory.");
+}
+
+VulkanRenderer2D::TextureResource VulkanRenderer2D::createTextureResource(
+    const std::uint32_t width,
+    const std::uint32_t height,
+    const std::uint8_t* rgba8,
+    const std::size_t byteCount)
+{
+    const VkDeviceSize imageSize = static_cast<VkDeviceSize>(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4U);
+    if (rgba8 == nullptr || byteCount < static_cast<std::size_t>(imageSize)) {
+        return {};
+    }
+
+    VkBuffer stagingBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory stagingMemory = VK_NULL_HANDLE;
+    createDeviceBuffer(
+        imageSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        stagingBuffer,
+        stagingMemory);
+
+    void* mapped = nullptr;
+    checkVk(vkMapMemory(m_device, stagingMemory, 0, imageSize, 0, &mapped), "Failed to map Renderer2D image staging buffer.");
+    std::memcpy(mapped, rgba8, static_cast<std::size_t>(imageSize));
+    vkUnmapMemory(m_device, stagingMemory);
+
+    TextureResource texture;
+    texture.width = width;
+    texture.height = height;
+    createImage(width, height, texture.image, texture.memory);
+    transitionImageLayout(texture.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    copyBufferToImage(stagingBuffer, texture.image, width, height);
+    transitionImageLayout(texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
+    vkFreeMemory(m_device, stagingMemory, nullptr);
+
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = texture.image;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.layerCount = 1;
+    checkVk(vkCreateImageView(m_device, &viewInfo, nullptr, &texture.imageView), "Failed to create Renderer2D image view.");
+
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.maxLod = 0.0f;
+    checkVk(vkCreateSampler(m_device, &samplerInfo, nullptr, &texture.sampler), "Failed to create Renderer2D image sampler.");
+
+    VkDescriptorSetAllocateInfo allocateInfo{};
+    allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocateInfo.descriptorPool = m_descriptorPool;
+    allocateInfo.descriptorSetCount = 1;
+    allocateInfo.pSetLayouts = &m_descriptorSetLayout;
+    checkVk(vkAllocateDescriptorSets(m_device, &allocateInfo, &texture.descriptorSet), "Failed to allocate Renderer2D image descriptor set.");
+
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.sampler = texture.sampler;
+    imageInfo.imageView = texture.imageView;
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = texture.descriptorSet;
+    write.dstBinding = 0;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    write.pImageInfo = &imageInfo;
+    vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
+
+    return texture;
+}
+
+void VulkanRenderer2D::createImage(const std::uint32_t width, const std::uint32_t height, VkImage& image, VkDeviceMemory& memory)
+{
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.extent = {width, height, 1};
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    checkVk(vkCreateImage(m_device, &imageInfo, nullptr, &image), "Failed to create Renderer2D image.");
+
+    VkMemoryRequirements requirements{};
+    vkGetImageMemoryRequirements(m_device, image, &requirements);
+
+    VkMemoryAllocateInfo allocateInfo{};
+    allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocateInfo.allocationSize = requirements.size;
+    allocateInfo.memoryTypeIndex = findMemoryType(requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    checkVk(vkAllocateMemory(m_device, &allocateInfo, nullptr, &memory), "Failed to allocate Renderer2D image memory.");
+    checkVk(vkBindImageMemory(m_device, image, memory, 0), "Failed to bind Renderer2D image memory.");
+}
+
+void VulkanRenderer2D::transitionImageLayout(const VkImage image, const VkImageLayout oldLayout, const VkImageLayout newLayout)
+{
+    const VkCommandBuffer commandBuffer = beginSingleUseCommands();
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = oldLayout;
+    barrier.newLayout = newLayout;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.layerCount = 1;
+
+    VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    VkPipelineStageFlags destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    } else {
+        throw std::runtime_error("Unsupported Renderer2D image layout transition.");
+    }
+
+    vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+    endSingleUseCommands(commandBuffer);
+}
+
+void VulkanRenderer2D::copyBufferToImage(const VkBuffer buffer, const VkImage image, const std::uint32_t width, const std::uint32_t height)
+{
+    const VkCommandBuffer commandBuffer = beginSingleUseCommands();
+
+    VkBufferImageCopy region{};
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.layerCount = 1;
+    region.imageExtent = {width, height, 1};
+    vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    endSingleUseCommands(commandBuffer);
+}
+
+VkCommandBuffer VulkanRenderer2D::beginSingleUseCommands() const
+{
+    VkCommandBufferAllocateInfo allocateInfo{};
+    allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocateInfo.commandPool = m_commandPool;
+    allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocateInfo.commandBufferCount = 1;
+
+    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+    checkVk(vkAllocateCommandBuffers(m_device, &allocateInfo, &commandBuffer), "Failed to allocate Renderer2D upload command buffer.");
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    checkVk(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Failed to begin Renderer2D upload command buffer.");
+
+    return commandBuffer;
+}
+
+void VulkanRenderer2D::endSingleUseCommands(const VkCommandBuffer commandBuffer) const
+{
+    checkVk(vkEndCommandBuffer(commandBuffer), "Failed to end Renderer2D upload command buffer.");
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+    checkVk(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE), "Failed to submit Renderer2D upload command buffer.");
+    checkVk(vkQueueWaitIdle(m_graphicsQueue), "Failed to wait for Renderer2D upload command buffer.");
+
+    vkFreeCommandBuffers(m_device, m_commandPool, 1, &commandBuffer);
+}
+
 // Creates the static quad buffer and dynamic instance buffer used by SDF UI rectangles.
 void VulkanRenderer2D::createSdfBuffers()
 {
@@ -609,6 +933,8 @@ void VulkanRenderer2D::createSdfBuffers()
 
 void VulkanRenderer2D::destroy()
 {
+    destroyTextureResources();
+
     if (m_vertexBuffer != VK_NULL_HANDLE) {
         vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
         m_vertexBuffer = VK_NULL_HANDLE;
@@ -658,6 +984,46 @@ void VulkanRenderer2D::destroy()
         vkDestroyPipelineLayout(m_device, m_sdfPipelineLayout, nullptr);
         m_sdfPipelineLayout = VK_NULL_HANDLE;
     }
+
+    if (m_descriptorPool != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
+        m_descriptorPool = VK_NULL_HANDLE;
+    }
+
+    if (m_descriptorSetLayout != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(m_device, m_descriptorSetLayout, nullptr);
+        m_descriptorSetLayout = VK_NULL_HANDLE;
+    }
+}
+
+void VulkanRenderer2D::destroyTextureResources()
+{
+    for (auto& [_, texture] : m_textures) {
+        destroyTextureResource(texture);
+    }
+    m_textures.clear();
+    destroyTextureResource(m_fallbackTexture);
+}
+
+void VulkanRenderer2D::destroyTextureResource(TextureResource& texture)
+{
+    if (texture.sampler != VK_NULL_HANDLE) {
+        vkDestroySampler(m_device, texture.sampler, nullptr);
+        texture.sampler = VK_NULL_HANDLE;
+    }
+    if (texture.imageView != VK_NULL_HANDLE) {
+        vkDestroyImageView(m_device, texture.imageView, nullptr);
+        texture.imageView = VK_NULL_HANDLE;
+    }
+    if (texture.image != VK_NULL_HANDLE) {
+        vkDestroyImage(m_device, texture.image, nullptr);
+        texture.image = VK_NULL_HANDLE;
+    }
+    if (texture.memory != VK_NULL_HANDLE) {
+        vkFreeMemory(m_device, texture.memory, nullptr);
+        texture.memory = VK_NULL_HANDLE;
+    }
+    texture.descriptorSet = VK_NULL_HANDLE;
 }
 
 void VulkanRenderer2D::uploadVertices()
@@ -801,9 +1167,9 @@ VkVertexInputBindingDescription VulkanRenderer2D::vertexBindingDescription()
     return bindingDescription;
 }
 
-std::array<VkVertexInputAttributeDescription, 2> VulkanRenderer2D::vertexAttributeDescriptions()
+std::array<VkVertexInputAttributeDescription, 3> VulkanRenderer2D::vertexAttributeDescriptions()
 {
-    std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+    std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
 
     attributeDescriptions[0].binding = 0;
     attributeDescriptions[0].location = 0;
@@ -814,6 +1180,11 @@ std::array<VkVertexInputAttributeDescription, 2> VulkanRenderer2D::vertexAttribu
     attributeDescriptions[1].location = 1;
     attributeDescriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
     attributeDescriptions[1].offset = offsetof(Vertex, color);
+
+    attributeDescriptions[2].binding = 0;
+    attributeDescriptions[2].location = 2;
+    attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+    attributeDescriptions[2].offset = offsetof(Vertex, uv);
 
     return attributeDescriptions;
 }

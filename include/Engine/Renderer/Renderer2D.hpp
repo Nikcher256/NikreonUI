@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
@@ -54,6 +55,19 @@ public:
         (void)uvMinimum;
         (void)uvMaximum;
         drawQuad(position, size, tint);
+    }
+    virtual void uploadImage(
+        UITextureId texture,
+        std::uint32_t width,
+        std::uint32_t height,
+        const std::uint8_t* rgba8,
+        std::size_t byteCount)
+    {
+        (void)texture;
+        (void)width;
+        (void)height;
+        (void)rgba8;
+        (void)byteCount;
     }
     virtual void pushClipRect(const UIClipRect& clipRect) = 0;
     virtual void popClipRect() = 0;

@@ -5,6 +5,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 #include <volk.h>
@@ -16,6 +17,7 @@ public:
     struct Vertex {
         glm::vec2 position{};
         glm::vec4 color{};
+        glm::vec2 uv{};
     };
 
     struct SdfVertex {
@@ -33,7 +35,13 @@ public:
         float borderWidth{0.0f};
     };
 
-    VulkanRenderer2D(VkDevice device, VkPhysicalDevice physicalDevice, VkRenderPass renderPass, std::size_t maxQuads = 4096);
+    VulkanRenderer2D(
+        VkDevice device,
+        VkPhysicalDevice physicalDevice,
+        VkQueue graphicsQueue,
+        VkCommandPool commandPool,
+        VkRenderPass renderPass,
+        std::size_t maxQuads = 4096);
     ~VulkanRenderer2D() override;
 
     VulkanRenderer2D(const VulkanRenderer2D&) = delete;
@@ -51,8 +59,16 @@ public:
     const glm::vec2& size,
     const glm::vec4& topLeft,
     const glm::vec4& topRight,
-    const glm::vec4& bottomRight,
-    const glm::vec4& bottomLeft) override;
+        const glm::vec4& bottomRight,
+        const glm::vec4& bottomLeft) override;
+    void drawImage(
+        UITextureId texture,
+        const glm::vec2& position,
+        const glm::vec2& size,
+        const glm::vec2& uvMinimum = {0.0f, 0.0f},
+        const glm::vec2& uvMaximum = {1.0f, 1.0f},
+        const glm::vec4& tint = {1.0f, 1.0f, 1.0f, 1.0f}) override;
+    void uploadImage(UITextureId texture, std::uint32_t width, std::uint32_t height, const std::uint8_t* rgba8, std::size_t byteCount) override;
     void drawRect(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color, float thickness = 1.0f) override;
     void drawSdfRect(
         const glm::vec2& position,
@@ -74,6 +90,9 @@ public:
 private:
     void createPipeline(VkRenderPass renderPass);
     void createSdfPipeline(VkRenderPass renderPass);
+    void createDescriptorResources();
+    void createFallbackTexture();
+    void destroyTextureResources();
     void createVertexBuffer();
     void createSdfBuffers();
     void destroy();
@@ -94,24 +113,48 @@ private:
         UIClipRect clipRect;
         std::uint32_t first{0};
         std::uint32_t count{0};
+        VkDescriptorSet descriptorSet{VK_NULL_HANDLE};
     };
 
-    void appendDrawCommand(DrawCommandType type, UIClipRect clipRect, std::uint32_t first, std::uint32_t count);
+    struct TextureResource {
+        VkImage image{VK_NULL_HANDLE};
+        VkDeviceMemory memory{VK_NULL_HANDLE};
+        VkImageView imageView{VK_NULL_HANDLE};
+        VkSampler sampler{VK_NULL_HANDLE};
+        VkDescriptorSet descriptorSet{VK_NULL_HANDLE};
+        std::uint32_t width{0};
+        std::uint32_t height{0};
+    };
+
+    void appendDrawCommand(DrawCommandType type, UIClipRect clipRect, std::uint32_t first, std::uint32_t count, VkDescriptorSet descriptorSet = VK_NULL_HANDLE);
     [[nodiscard]] std::uint64_t currentRenderOrder();
+    [[nodiscard]] VkDescriptorSet descriptorSetForTexture(UITextureId texture) const;
+    TextureResource createTextureResource(std::uint32_t width, std::uint32_t height, const std::uint8_t* rgba8, std::size_t byteCount);
+    void destroyTextureResource(TextureResource& texture);
 
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& buffer, VkDeviceMemory& memory);
+    void createDeviceBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& memory);
+    void createImage(std::uint32_t width, std::uint32_t height, VkImage& image, VkDeviceMemory& memory);
+    void transitionImageLayout(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout);
+    void copyBufferToImage(VkBuffer buffer, VkImage image, std::uint32_t width, std::uint32_t height);
+    [[nodiscard]] VkCommandBuffer beginSingleUseCommands() const;
+    void endSingleUseCommands(VkCommandBuffer commandBuffer) const;
     [[nodiscard]] glm::vec2 toNdc(const glm::vec2& pixelPosition) const;
     [[nodiscard]] VkShaderModule createShaderModule(const std::vector<char>& bytecode) const;
     [[nodiscard]] std::uint32_t findMemoryType(std::uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
 
     static std::vector<char> readFile(const char* path);
     static VkVertexInputBindingDescription vertexBindingDescription();
-    static std::array<VkVertexInputAttributeDescription, 2> vertexAttributeDescriptions();
+    static std::array<VkVertexInputAttributeDescription, 3> vertexAttributeDescriptions();
     static std::array<VkVertexInputBindingDescription, 2> sdfVertexBindingDescriptions();
     static std::array<VkVertexInputAttributeDescription, 9> sdfVertexAttributeDescriptions();
 
     VkDevice m_device{VK_NULL_HANDLE};
     VkPhysicalDevice m_physicalDevice{VK_NULL_HANDLE};
+    VkQueue m_graphicsQueue{VK_NULL_HANDLE};
+    VkCommandPool m_commandPool{VK_NULL_HANDLE};
+    VkDescriptorSetLayout m_descriptorSetLayout{VK_NULL_HANDLE};
+    VkDescriptorPool m_descriptorPool{VK_NULL_HANDLE};
     VkPipelineLayout m_pipelineLayout{VK_NULL_HANDLE};
     VkPipeline m_pipeline{VK_NULL_HANDLE};
     VkPipelineLayout m_sdfPipelineLayout{VK_NULL_HANDLE};
@@ -131,6 +174,8 @@ private:
     std::vector<SdfInstance> m_sdfInstances;
     std::vector<DrawCommand> m_drawCommands;
     std::vector<UIClipRect> m_clipStack;
+    TextureResource m_fallbackTexture{};
+    std::unordered_map<UITextureId, TextureResource> m_textures;
     std::uint64_t m_nextRenderOrder{1};
     std::uint64_t m_currentCompositeRenderOrder{0};
     bool m_compositeRenderItemActive{false};

@@ -815,25 +815,25 @@ void UIBuilder::applyWidgetState(Element& target)
     }
     case ElementType::Checkbox: {
         auto& checkbox = *static_cast<Checkbox*>(widget);
-        checkbox.setChecked(target.checked);
         checkbox.setOnValueChanged(target.onBoolChanged);
+        checkbox.setChecked(target.checked);
         break;
     }
     case ElementType::SliderFloat: {
         auto& slider = *static_cast<Slider*>(widget);
+        slider.setOnValueChanged(target.onFloatChanged);
         slider.setRange(target.minValue, target.maxValue);
         slider.setPrecision(target.precision);
         slider.setValue(target.floatValue);
-        slider.setOnValueChanged(target.onFloatChanged);
         break;
     }
     case ElementType::NumberFloat: {
         auto& number = *static_cast<NumberInput*>(widget);
+        number.setOnValueChanged(target.onFloatChanged);
         number.setRange(target.minValue, target.maxValue);
         number.setSensitivity(target.sensitivity);
         number.setPrecision(target.precision);
         number.setValue(target.floatValue);
-        number.setOnValueChanged(target.onFloatChanged);
         break;
     }
     case ElementType::TextInput: {
@@ -857,15 +857,15 @@ void UIBuilder::applyWidgetState(Element& target)
     }
     case ElementType::Dropdown: {
         auto& dropdown = *static_cast<Dropdown*>(widget);
+        dropdown.setOnSelectionChanged(target.onSelectionChanged);
         dropdown.setItems(target.items);
         dropdown.setSelectedIndex(target.selectedIndex);
-        dropdown.setOnSelectionChanged(target.onSelectionChanged);
         break;
     }
     case ElementType::ColorPicker: {
         auto& picker = *static_cast<ColorPicker*>(widget);
-        picker.setColor(target.color);
         picker.setOnColorChanged(target.onColorChanged);
+        picker.setColor(target.color);
         break;
     }
     default:
