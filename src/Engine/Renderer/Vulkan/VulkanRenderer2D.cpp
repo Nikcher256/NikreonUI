@@ -15,6 +15,7 @@ namespace Engine {
 namespace {
 
 constexpr std::size_t VerticesPerQuad = 6;
+constexpr std::uint32_t MaxTextureSlotsPerDraw = 16;
 constexpr std::uint64_t UncompositedShapeRenderOrder = 0;
 
 bool sameClipRect(const UIClipRect& left, const UIClipRect& right)
@@ -115,13 +116,13 @@ void VulkanRenderer2D::drawQuad(const glm::vec2& position, const glm::vec2& size
     const glm::vec2 p3 = toNdc({position.x, position.y + size.y});
     const std::uint32_t first = static_cast<std::uint32_t>(m_vertices.size());
 
-    m_vertices.push_back({p0, color, {0.0f, 0.0f}});
-    m_vertices.push_back({p1, color, {1.0f, 0.0f}});
-    m_vertices.push_back({p2, color, {1.0f, 1.0f}});
-    m_vertices.push_back({p2, color, {1.0f, 1.0f}});
-    m_vertices.push_back({p3, color, {0.0f, 1.0f}});
-    m_vertices.push_back({p0, color, {0.0f, 0.0f}});
-    appendDrawCommand(DrawCommandType::Quad, currentClipRect(), first, static_cast<std::uint32_t>(VerticesPerQuad), m_fallbackTexture.descriptorSet);
+    m_vertices.push_back({p0, color, {0.0f, 0.0f}, 0U});
+    m_vertices.push_back({p1, color, {1.0f, 0.0f}, 0U});
+    m_vertices.push_back({p2, color, {1.0f, 1.0f}, 0U});
+    m_vertices.push_back({p2, color, {1.0f, 1.0f}, 0U});
+    m_vertices.push_back({p3, color, {0.0f, 1.0f}, 0U});
+    m_vertices.push_back({p0, color, {0.0f, 0.0f}, 0U});
+    appendDrawCommand(DrawCommandType::Quad, currentClipRect(), first, static_cast<std::uint32_t>(VerticesPerQuad));
 }
 
 void VulkanRenderer2D::drawGradientQuad(
@@ -146,15 +147,15 @@ void VulkanRenderer2D::drawGradientQuad(
     const glm::vec2 p3 = toNdc({position.x, position.y + size.y});
     const std::uint32_t first = static_cast<std::uint32_t>(m_vertices.size());
 
-    m_vertices.push_back({p0, topLeft, {0.0f, 0.0f}});
-    m_vertices.push_back({p1, topRight, {1.0f, 0.0f}});
-    m_vertices.push_back({p2, bottomRight, {1.0f, 1.0f}});
+    m_vertices.push_back({p0, topLeft, {0.0f, 0.0f}, 0U});
+    m_vertices.push_back({p1, topRight, {1.0f, 0.0f}, 0U});
+    m_vertices.push_back({p2, bottomRight, {1.0f, 1.0f}, 0U});
 
-    m_vertices.push_back({p2, bottomRight, {1.0f, 1.0f}});
-    m_vertices.push_back({p3, bottomLeft, {0.0f, 1.0f}});
-    m_vertices.push_back({p0, topLeft, {0.0f, 0.0f}});
+    m_vertices.push_back({p2, bottomRight, {1.0f, 1.0f}, 0U});
+    m_vertices.push_back({p3, bottomLeft, {0.0f, 1.0f}, 0U});
+    m_vertices.push_back({p0, topLeft, {0.0f, 0.0f}, 0U});
 
-    appendDrawCommand(DrawCommandType::Quad, currentClipRect(), first, static_cast<std::uint32_t>(VerticesPerQuad), m_fallbackTexture.descriptorSet);
+    appendDrawCommand(DrawCommandType::Quad, currentClipRect(), first, static_cast<std::uint32_t>(VerticesPerQuad));
 }
 
 void VulkanRenderer2D::drawImage(
@@ -173,19 +174,76 @@ void VulkanRenderer2D::drawImage(
         return;
     }
 
+    const UIClipRect clipRect = currentClipRect();
+    const std::uint64_t renderOrder = currentRenderOrder();
+    const std::uint32_t first = static_cast<std::uint32_t>(m_vertices.size());
+    UITextureId resolvedTexture = texture;
+    if (m_textures.find(resolvedTexture) == m_textures.end()) {
+        resolvedTexture = 0U;
+    }
+
+    std::array<UITextureId, TextureSlotsPerDraw> textures{};
+    textures[0] = resolvedTexture;
+    std::uint32_t textureSlot = 0U;
+    DrawCommand* mergeTarget = nullptr;
+
+    if (!m_drawCommands.empty()) {
+        DrawCommand& previous = m_drawCommands.back();
+        if (previous.type == DrawCommandType::Quad &&
+            previous.renderOrder == renderOrder &&
+            sameClipRect(previous.clipRect, clipRect) &&
+            previous.first + previous.count == first) {
+            textures = previous.textures;
+
+            bool foundSlot = false;
+            for (std::uint32_t slot = 0U; slot < TextureSlotsPerDraw; ++slot) {
+                if (textures[slot] == resolvedTexture) {
+                    textureSlot = slot;
+                    foundSlot = true;
+                    break;
+                }
+            }
+
+            if (!foundSlot) {
+                for (std::uint32_t slot = 0U; slot < TextureSlotsPerDraw; ++slot) {
+                    if (textures[slot] == 0U) {
+                        textures[slot] = resolvedTexture;
+                        textureSlot = slot;
+                        foundSlot = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!foundSlot) {
+                textures = {};
+                textures[0] = resolvedTexture;
+                textureSlot = 0U;
+            } else {
+                mergeTarget = &previous;
+            }
+        }
+    }
+
     const glm::vec2 p0 = toNdc(position);
     const glm::vec2 p1 = toNdc({position.x + size.x, position.y});
     const glm::vec2 p2 = toNdc({position.x + size.x, position.y + size.y});
     const glm::vec2 p3 = toNdc({position.x, position.y + size.y});
-    const std::uint32_t first = static_cast<std::uint32_t>(m_vertices.size());
 
-    m_vertices.push_back({p0, tint, {uvMinimum.x, uvMinimum.y}});
-    m_vertices.push_back({p1, tint, {uvMaximum.x, uvMinimum.y}});
-    m_vertices.push_back({p2, tint, {uvMaximum.x, uvMaximum.y}});
-    m_vertices.push_back({p2, tint, {uvMaximum.x, uvMaximum.y}});
-    m_vertices.push_back({p3, tint, {uvMinimum.x, uvMaximum.y}});
-    m_vertices.push_back({p0, tint, {uvMinimum.x, uvMinimum.y}});
-    appendDrawCommand(DrawCommandType::Quad, currentClipRect(), first, static_cast<std::uint32_t>(VerticesPerQuad), descriptorSetForTexture(texture));
+    m_vertices.push_back({p0, tint, {uvMinimum.x, uvMinimum.y}, textureSlot});
+    m_vertices.push_back({p1, tint, {uvMaximum.x, uvMinimum.y}, textureSlot});
+    m_vertices.push_back({p2, tint, {uvMaximum.x, uvMaximum.y}, textureSlot});
+    m_vertices.push_back({p2, tint, {uvMaximum.x, uvMaximum.y}, textureSlot});
+    m_vertices.push_back({p3, tint, {uvMinimum.x, uvMaximum.y}, textureSlot});
+    m_vertices.push_back({p0, tint, {uvMinimum.x, uvMinimum.y}, textureSlot});
+
+    if (mergeTarget != nullptr) {
+        mergeTarget->textures = textures;
+        mergeTarget->count += static_cast<std::uint32_t>(VerticesPerQuad);
+        return;
+    }
+
+    appendDrawCommand(DrawCommandType::Quad, clipRect, first, static_cast<std::uint32_t>(VerticesPerQuad), textures);
 }
 
 void VulkanRenderer2D::uploadImage(
@@ -312,17 +370,17 @@ void VulkanRenderer2D::record(const VkCommandBuffer commandBuffer, const std::ui
 
         setScissor(commandBuffer, command.clipRect);
         if (command.type == DrawCommandType::Quad) {
-            const VkDescriptorSet descriptorSet = command.descriptorSet != VK_NULL_HANDLE ? command.descriptorSet : m_fallbackTexture.descriptorSet;
-            vkCmdBindDescriptorSets(
-                commandBuffer,
-                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                m_pipelineLayout,
-                0,
-                1,
-                &descriptorSet,
-                0,
-                nullptr);
-            vkCmdDraw(commandBuffer, command.count, 1, command.first, 0);
+        const VkDescriptorSet descriptorSet = descriptorSetForTextures(command.textures);
+        vkCmdBindDescriptorSets(
+            commandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            m_pipelineLayout,
+            0,
+            1,
+            &descriptorSet,
+            0,
+            nullptr);
+        vkCmdDraw(commandBuffer, command.count, 1, command.first, 0);
         } else {
             vkCmdDraw(commandBuffer, static_cast<std::uint32_t>(VerticesPerQuad), command.count, 0, command.first);
         }
@@ -353,7 +411,7 @@ void VulkanRenderer2D::appendDrawCommand(
     const UIClipRect clipRect,
     const std::uint32_t first,
     const std::uint32_t count,
-    const VkDescriptorSet descriptorSet)
+    const std::array<UITextureId, TextureSlotsPerDraw>& textures)
 {
     const std::uint64_t renderOrder = currentRenderOrder();
     if (!m_drawCommands.empty()) {
@@ -362,13 +420,13 @@ void VulkanRenderer2D::appendDrawCommand(
             previous.renderOrder == renderOrder &&
             sameClipRect(previous.clipRect, clipRect) &&
             previous.first + previous.count == first &&
-            previous.descriptorSet == descriptorSet) {
+            previous.textures == textures) {
             previous.count += count;
             return;
         }
     }
 
-    m_drawCommands.push_back({type, renderOrder, clipRect, first, count, descriptorSet});
+    m_drawCommands.push_back({type, renderOrder, clipRect, first, count, textures});
 }
 
 std::uint64_t VulkanRenderer2D::currentRenderOrder()
@@ -376,14 +434,51 @@ std::uint64_t VulkanRenderer2D::currentRenderOrder()
     return m_compositeRenderItemActive ? m_currentCompositeRenderOrder : UncompositedShapeRenderOrder;
 }
 
-VkDescriptorSet VulkanRenderer2D::descriptorSetForTexture(const UITextureId texture) const
+VkDescriptorSet VulkanRenderer2D::descriptorSetForTextures(const std::array<UITextureId, TextureSlotsPerDraw>& textures) const
 {
-    const auto found = m_textures.find(texture);
-    if (found != m_textures.end() && found->second.descriptorSet != VK_NULL_HANDLE) {
-        return found->second.descriptorSet;
+    if (const auto found = m_textureSetDescriptors.find(textures); found != m_textureSetDescriptors.end()) {
+        return found->second;
     }
 
-    return m_fallbackTexture.descriptorSet;
+    std::array<VkDescriptorImageInfo, TextureSlotsPerDraw> imageInfos{};
+    for (std::size_t index = 0; index < TextureSlotsPerDraw; ++index) {
+        const TextureResource& texture = textureResourceForTexture(textures[index]);
+        imageInfos[index] = {
+            texture.sampler,
+            texture.imageView,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        };
+    }
+
+    VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+    VkDescriptorSetAllocateInfo allocateInfo{};
+    allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocateInfo.descriptorPool = m_descriptorPool;
+    allocateInfo.descriptorSetCount = 1;
+    allocateInfo.pSetLayouts = &m_descriptorSetLayout;
+    checkVk(vkAllocateDescriptorSets(m_device, &allocateInfo, &descriptorSet), "Failed to allocate Renderer2D texture batch descriptor set.");
+
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = descriptorSet;
+    write.dstBinding = 0;
+    write.descriptorCount = static_cast<std::uint32_t>(imageInfos.size());
+    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    write.pImageInfo = imageInfos.data();
+    vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
+
+    m_textureSetDescriptors.emplace(textures, descriptorSet);
+    return descriptorSet;
+}
+
+const VulkanRenderer2D::TextureResource& VulkanRenderer2D::textureResourceForTexture(const UITextureId texture) const
+{
+    const auto found = m_textures.find(texture);
+    if (found != m_textures.end() && found->second.imageView != VK_NULL_HANDLE && found->second.sampler != VK_NULL_HANDLE) {
+        return found->second;
+    }
+
+    return m_fallbackTexture;
 }
 
 void VulkanRenderer2D::createPipeline(const VkRenderPass renderPass)
@@ -616,7 +711,7 @@ void VulkanRenderer2D::createDescriptorResources()
     VkDescriptorSetLayoutBinding textureBinding{};
     textureBinding.binding = 0;
     textureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    textureBinding.descriptorCount = 1;
+    textureBinding.descriptorCount = static_cast<std::uint32_t>(TextureSlotsPerDraw);
     textureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -627,7 +722,7 @@ void VulkanRenderer2D::createDescriptorResources()
 
     VkDescriptorPoolSize poolSize{};
     poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSize.descriptorCount = 512U;
+    poolSize.descriptorCount = 512U * static_cast<std::uint32_t>(TextureSlotsPerDraw);
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -761,7 +856,7 @@ VulkanRenderer2D::TextureResource VulkanRenderer2D::createTextureResource(
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = texture.image;
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    viewInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
     viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     viewInfo.subresourceRange.levelCount = 1;
     viewInfo.subresourceRange.layerCount = 1;
@@ -777,27 +872,6 @@ VulkanRenderer2D::TextureResource VulkanRenderer2D::createTextureResource(
     samplerInfo.maxLod = 0.0f;
     checkVk(vkCreateSampler(m_device, &samplerInfo, nullptr, &texture.sampler), "Failed to create Renderer2D image sampler.");
 
-    VkDescriptorSetAllocateInfo allocateInfo{};
-    allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocateInfo.descriptorPool = m_descriptorPool;
-    allocateInfo.descriptorSetCount = 1;
-    allocateInfo.pSetLayouts = &m_descriptorSetLayout;
-    checkVk(vkAllocateDescriptorSets(m_device, &allocateInfo, &texture.descriptorSet), "Failed to allocate Renderer2D image descriptor set.");
-
-    VkDescriptorImageInfo imageInfo{};
-    imageInfo.sampler = texture.sampler;
-    imageInfo.imageView = texture.imageView;
-    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-    VkWriteDescriptorSet write{};
-    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet = texture.descriptorSet;
-    write.dstBinding = 0;
-    write.descriptorCount = 1;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    write.pImageInfo = &imageInfo;
-    vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
-
     return texture;
 }
 
@@ -809,7 +883,7 @@ void VulkanRenderer2D::createImage(const std::uint32_t width, const std::uint32_
     imageInfo.extent = {width, height, 1};
     imageInfo.mipLevels = 1;
     imageInfo.arrayLayers = 1;
-    imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    imageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -998,6 +1072,7 @@ void VulkanRenderer2D::destroy()
 
 void VulkanRenderer2D::destroyTextureResources()
 {
+    m_textureSetDescriptors.clear();
     for (auto& [_, texture] : m_textures) {
         destroyTextureResource(texture);
     }
@@ -1167,9 +1242,9 @@ VkVertexInputBindingDescription VulkanRenderer2D::vertexBindingDescription()
     return bindingDescription;
 }
 
-std::array<VkVertexInputAttributeDescription, 3> VulkanRenderer2D::vertexAttributeDescriptions()
+std::array<VkVertexInputAttributeDescription, 4> VulkanRenderer2D::vertexAttributeDescriptions()
 {
-    std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
+    std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions{};
 
     attributeDescriptions[0].binding = 0;
     attributeDescriptions[0].location = 0;
@@ -1185,6 +1260,11 @@ std::array<VkVertexInputAttributeDescription, 3> VulkanRenderer2D::vertexAttribu
     attributeDescriptions[2].location = 2;
     attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
     attributeDescriptions[2].offset = offsetof(Vertex, uv);
+
+    attributeDescriptions[3].binding = 0;
+    attributeDescriptions[3].location = 3;
+    attributeDescriptions[3].format = VK_FORMAT_R32_UINT;
+    attributeDescriptions[3].offset = offsetof(Vertex, textureSlot);
 
     return attributeDescriptions;
 }

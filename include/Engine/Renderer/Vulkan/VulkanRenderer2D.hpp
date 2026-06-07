@@ -10,6 +10,19 @@
 
 #include <volk.h>
 
+template <>
+struct std::hash<std::array<Engine::UITextureId, 16>> {
+    std::size_t operator()(const std::array<Engine::UITextureId, 16>& values) const noexcept
+    {
+        std::size_t hash = 1469598103934665603ull;
+        for (const Engine::UITextureId value : values) {
+            hash ^= static_cast<std::size_t>(value);
+            hash *= 1099511628211ull;
+        }
+        return hash;
+    }
+};
+
 namespace Engine {
 
 class VulkanRenderer2D final : public Renderer2D {
@@ -18,6 +31,7 @@ public:
         glm::vec2 position{};
         glm::vec4 color{};
         glm::vec2 uv{};
+        std::uint32_t textureSlot{0};
     };
 
     struct SdfVertex {
@@ -102,6 +116,8 @@ private:
     void setScissor(VkCommandBuffer commandBuffer, const UIClipRect& clipRect) const;
     [[nodiscard]] UIClipRect currentClipRect() const;
 
+    static constexpr std::size_t TextureSlotsPerDraw = 16;
+
     enum class DrawCommandType {
         Quad,
         SdfRect,
@@ -113,7 +129,7 @@ private:
         UIClipRect clipRect;
         std::uint32_t first{0};
         std::uint32_t count{0};
-        VkDescriptorSet descriptorSet{VK_NULL_HANDLE};
+        std::array<UITextureId, TextureSlotsPerDraw> textures{};
     };
 
     struct TextureResource {
@@ -126,9 +142,15 @@ private:
         std::uint32_t height{0};
     };
 
-    void appendDrawCommand(DrawCommandType type, UIClipRect clipRect, std::uint32_t first, std::uint32_t count, VkDescriptorSet descriptorSet = VK_NULL_HANDLE);
+    void appendDrawCommand(
+        DrawCommandType type,
+        UIClipRect clipRect,
+        std::uint32_t first,
+        std::uint32_t count,
+        const std::array<UITextureId, TextureSlotsPerDraw>& textures = {});
     [[nodiscard]] std::uint64_t currentRenderOrder();
-    [[nodiscard]] VkDescriptorSet descriptorSetForTexture(UITextureId texture) const;
+    [[nodiscard]] VkDescriptorSet descriptorSetForTextures(const std::array<UITextureId, TextureSlotsPerDraw>& textures) const;
+    [[nodiscard]] const TextureResource& textureResourceForTexture(UITextureId texture) const;
     TextureResource createTextureResource(std::uint32_t width, std::uint32_t height, const std::uint8_t* rgba8, std::size_t byteCount);
     void destroyTextureResource(TextureResource& texture);
 
@@ -145,7 +167,7 @@ private:
 
     static std::vector<char> readFile(const char* path);
     static VkVertexInputBindingDescription vertexBindingDescription();
-    static std::array<VkVertexInputAttributeDescription, 3> vertexAttributeDescriptions();
+    static std::array<VkVertexInputAttributeDescription, 4> vertexAttributeDescriptions();
     static std::array<VkVertexInputBindingDescription, 2> sdfVertexBindingDescriptions();
     static std::array<VkVertexInputAttributeDescription, 9> sdfVertexAttributeDescriptions();
 
@@ -175,6 +197,7 @@ private:
     std::vector<DrawCommand> m_drawCommands;
     std::vector<UIClipRect> m_clipStack;
     TextureResource m_fallbackTexture{};
+    mutable std::unordered_map<std::array<UITextureId, TextureSlotsPerDraw>, VkDescriptorSet> m_textureSetDescriptors;
     std::unordered_map<UITextureId, TextureResource> m_textures;
     std::uint64_t m_nextRenderOrder{1};
     std::uint64_t m_currentCompositeRenderOrder{0};
