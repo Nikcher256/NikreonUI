@@ -120,6 +120,8 @@ public:
     void layout();
     void update();
     void render();
+    void renderBaseLayer();
+    void renderTopLayer();
     void end();
 
     [[nodiscard]] UIRect bounds(std::string_view id) const;

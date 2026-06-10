@@ -33,7 +33,7 @@ T* ensureWidget(std::unordered_map<std::string, std::unique_ptr<T>>& widgets, co
 
 float labelHeight()
 {
-    return 18.0f;
+    return 20.0f;
 }
 
 float labelGap()
@@ -375,11 +375,23 @@ void UIBuilder::update()
 
 void UIBuilder::render()
 {
+    renderBaseLayer();
+    renderTopLayer();
+}
+
+void UIBuilder::renderBaseLayer()
+{
     UIFrame frame{*m_context, *m_renderer, *m_text, *m_style, m_surface};
     m_renderQueue.add(UIRenderLayer::Background, [this, &frame]() {
         const UICompositeRenderScope compositeScope{frame};
         renderBase(frame);
     });
+    m_renderQueue.flush();
+}
+
+void UIBuilder::renderTopLayer()
+{
+    UIFrame frame{*m_context, *m_renderer, *m_text, *m_style, m_surface};
     m_renderQueue.add(UIRenderLayer::Popup, [this, &frame]() {
         const UICompositeRenderScope compositeScope{frame};
         renderPopups();

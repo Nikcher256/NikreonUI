@@ -953,11 +953,16 @@ void VulkanTextRenderer::setScissor(const VkCommandBuffer commandBuffer, const U
     const float right = std::clamp(clipRect.position.x + clipRect.size.x, x, maxWidth);
     const float bottom = std::clamp(clipRect.position.y + clipRect.size.y, y, maxHeight);
 
+    const float scissorX = std::floor(x);
+    const float scissorY = std::floor(y);
+    const float scissorRight = std::ceil(right);
+    const float scissorBottom = std::ceil(bottom);
+
     VkRect2D scissor{};
-    scissor.offset = {static_cast<std::int32_t>(x), static_cast<std::int32_t>(y)};
+    scissor.offset = {static_cast<std::int32_t>(scissorX), static_cast<std::int32_t>(scissorY)};
     scissor.extent = {
-        static_cast<std::uint32_t>(right - x),
-        static_cast<std::uint32_t>(bottom - y),
+        static_cast<std::uint32_t>(std::max(scissorRight - scissorX, 0.0f)),
+        static_cast<std::uint32_t>(std::max(scissorBottom - scissorY, 0.0f)),
     };
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 }

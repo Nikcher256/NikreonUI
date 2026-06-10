@@ -28,6 +28,9 @@ void UIFrame::drawBox(const UIClipRect& bounds, const UIBoxStyle& box) const
 
 namespace {
 
+constexpr float TextClipTopPadding = 1.0f;
+constexpr float TextClipBottomPadding = 3.0f;
+
 float lineHeight(TextRenderer& renderer, const std::string& font, const float scale)
 {
     return std::max(renderer.measureText("Mg", font, scale).y, 1.0f);
@@ -145,7 +148,10 @@ bool UIFrame::drawText(const std::string_view value, const UIClipRect& bounds, c
 
     const bool clipsText = textStyle.overflow == UIOverflow::Clip;
     if (clipsText) {
-        m_text->pushClipRect(toScreen(bounds));
+        UIClipRect clipBounds = toScreen(bounds);
+        clipBounds.position.y = std::max(0.0f, clipBounds.position.y - TextClipTopPadding);
+        clipBounds.size.y += TextClipTopPadding + TextClipBottomPadding;
+        m_text->pushClipRect(clipBounds);
     }
 
     for (std::size_t index = 0; index < lines.size(); ++index) {
