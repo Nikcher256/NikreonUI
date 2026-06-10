@@ -137,6 +137,7 @@ private:
     VkPipeline m_pipeline{VK_NULL_HANDLE};
     VkBuffer m_vertexBuffer{VK_NULL_HANDLE};
     VkDeviceMemory m_vertexBufferMemory{VK_NULL_HANDLE};
+    void* m_vertexBufferMapped{nullptr};
     VkDeviceSize m_vertexBufferSize{0};
     FT_Library m_freetype{nullptr};
     glm::uvec2 m_viewportSize{};

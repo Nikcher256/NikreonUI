@@ -183,12 +183,14 @@ private:
     VkPipeline m_sdfPipeline{VK_NULL_HANDLE};
     VkBuffer m_vertexBuffer{VK_NULL_HANDLE};
     VkDeviceMemory m_vertexBufferMemory{VK_NULL_HANDLE};
+    void* m_vertexBufferMapped{nullptr};
     VkDeviceSize m_vertexBufferSize{0};
     VkBuffer m_sdfVertexBuffer{VK_NULL_HANDLE};
     VkDeviceMemory m_sdfVertexBufferMemory{VK_NULL_HANDLE};
     VkDeviceSize m_sdfVertexBufferSize{0};
     VkBuffer m_sdfInstanceBuffer{VK_NULL_HANDLE};
     VkDeviceMemory m_sdfInstanceBufferMemory{VK_NULL_HANDLE};
+    void* m_sdfInstanceBufferMapped{nullptr};
     VkDeviceSize m_sdfInstanceBufferSize{0};
     glm::uvec2 m_viewportSize{};
     std::size_t m_maxQuads{0};

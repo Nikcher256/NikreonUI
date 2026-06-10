@@ -655,6 +655,7 @@ void VulkanTextRenderer::createVertexBuffer()
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         m_vertexBuffer,
         m_vertexBufferMemory);
+    checkVk(vkMapMemory(m_device, m_vertexBufferMemory, 0, m_vertexBufferSize, 0, &m_vertexBufferMapped), "Failed to map TextRenderer vertex buffer memory.");
 }
 
 void VulkanTextRenderer::destroy()
@@ -669,7 +670,12 @@ void VulkanTextRenderer::destroy()
         vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
     }
     if (m_vertexBufferMemory != VK_NULL_HANDLE) {
+        if (m_vertexBufferMapped != nullptr) {
+            vkUnmapMemory(m_device, m_vertexBufferMemory);
+            m_vertexBufferMapped = nullptr;
+        }
         vkFreeMemory(m_device, m_vertexBufferMemory, nullptr);
+        m_vertexBufferMemory = VK_NULL_HANDLE;
     }
     if (m_pipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(m_device, m_pipeline, nullptr);
@@ -715,11 +721,11 @@ void VulkanTextRenderer::uploadVertices()
     if (uploadSize > m_vertexBufferSize) {
         throw std::runtime_error("TextRenderer vertex upload exceeded vertex buffer capacity.");
     }
+    if (m_vertexBufferMapped == nullptr) {
+        throw std::runtime_error("TextRenderer vertex buffer memory is not mapped.");
+    }
 
-    void* mappedMemory = nullptr;
-    checkVk(vkMapMemory(m_device, m_vertexBufferMemory, 0, uploadSize, 0, &mappedMemory), "Failed to map TextRenderer vertex buffer memory.");
-    std::memcpy(mappedMemory, m_vertices.data(), static_cast<std::size_t>(uploadSize));
-    vkUnmapMemory(m_device, m_vertexBufferMemory);
+    std::memcpy(m_vertexBufferMapped, m_vertices.data(), static_cast<std::size_t>(uploadSize));
 }
 
 std::uint64_t VulkanTextRenderer::currentRenderOrder() const

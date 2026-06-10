@@ -762,6 +762,7 @@ void VulkanRenderer2D::createVertexBuffer()
 
     checkVk(vkAllocateMemory(m_device, &allocateInfo, nullptr, &m_vertexBufferMemory), "Failed to allocate Renderer2D vertex buffer memory.");
     checkVk(vkBindBufferMemory(m_device, m_vertexBuffer, m_vertexBufferMemory, 0), "Failed to bind Renderer2D vertex buffer memory.");
+    checkVk(vkMapMemory(m_device, m_vertexBufferMemory, 0, m_vertexBufferSize, 0, &m_vertexBufferMapped), "Failed to map Renderer2D vertex buffer memory.");
 }
 
 // Creates a host-visible buffer for simple dynamic 2D data.
@@ -998,6 +999,7 @@ void VulkanRenderer2D::createSdfBuffers()
 
     createBuffer(m_sdfVertexBufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, m_sdfVertexBuffer, m_sdfVertexBufferMemory);
     createBuffer(m_sdfInstanceBufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, m_sdfInstanceBuffer, m_sdfInstanceBufferMemory);
+    checkVk(vkMapMemory(m_device, m_sdfInstanceBufferMemory, 0, m_sdfInstanceBufferSize, 0, &m_sdfInstanceBufferMapped), "Failed to map Renderer2D SDF instance buffer memory.");
 
     void* mappedMemory = nullptr;
     checkVk(vkMapMemory(m_device, m_sdfVertexBufferMemory, 0, m_sdfVertexBufferSize, 0, &mappedMemory), "Failed to map Renderer2D SDF quad vertex buffer memory.");
@@ -1015,6 +1017,10 @@ void VulkanRenderer2D::destroy()
     }
 
     if (m_vertexBufferMemory != VK_NULL_HANDLE) {
+        if (m_vertexBufferMapped != nullptr) {
+            vkUnmapMemory(m_device, m_vertexBufferMemory);
+            m_vertexBufferMapped = nullptr;
+        }
         vkFreeMemory(m_device, m_vertexBufferMemory, nullptr);
         m_vertexBufferMemory = VK_NULL_HANDLE;
     }
@@ -1035,6 +1041,10 @@ void VulkanRenderer2D::destroy()
     }
 
     if (m_sdfInstanceBufferMemory != VK_NULL_HANDLE) {
+        if (m_sdfInstanceBufferMapped != nullptr) {
+            vkUnmapMemory(m_device, m_sdfInstanceBufferMemory);
+            m_sdfInstanceBufferMapped = nullptr;
+        }
         vkFreeMemory(m_device, m_sdfInstanceBufferMemory, nullptr);
         m_sdfInstanceBufferMemory = VK_NULL_HANDLE;
     }
@@ -1111,11 +1121,11 @@ void VulkanRenderer2D::uploadVertices()
     if (uploadSize > m_vertexBufferSize) {
         throw std::runtime_error("Renderer2D vertex upload exceeded vertex buffer capacity.");
     }
+    if (m_vertexBufferMapped == nullptr) {
+        throw std::runtime_error("Renderer2D vertex buffer memory is not mapped.");
+    }
 
-    void* mappedMemory = nullptr;
-    checkVk(vkMapMemory(m_device, m_vertexBufferMemory, 0, uploadSize, 0, &mappedMemory), "Failed to map Renderer2D vertex buffer memory.");
-    std::memcpy(mappedMemory, m_vertices.data(), static_cast<std::size_t>(uploadSize));
-    vkUnmapMemory(m_device, m_vertexBufferMemory);
+    std::memcpy(m_vertexBufferMapped, m_vertices.data(), static_cast<std::size_t>(uploadSize));
 }
 
 // Uploads one compact instance record per SDF rectangle.
@@ -1129,11 +1139,11 @@ void VulkanRenderer2D::uploadSdfInstances()
     if (uploadSize > m_sdfInstanceBufferSize) {
         throw std::runtime_error("Renderer2D SDF instance upload exceeded instance buffer capacity.");
     }
+    if (m_sdfInstanceBufferMapped == nullptr) {
+        throw std::runtime_error("Renderer2D SDF instance buffer memory is not mapped.");
+    }
 
-    void* mappedMemory = nullptr;
-    checkVk(vkMapMemory(m_device, m_sdfInstanceBufferMemory, 0, uploadSize, 0, &mappedMemory), "Failed to map Renderer2D SDF instance buffer memory.");
-    std::memcpy(mappedMemory, m_sdfInstances.data(), static_cast<std::size_t>(uploadSize));
-    vkUnmapMemory(m_device, m_sdfInstanceBufferMemory);
+    std::memcpy(m_sdfInstanceBufferMapped, m_sdfInstances.data(), static_cast<std::size_t>(uploadSize));
 }
 
 // Applies viewport and scissor state shared by the 2D pipelines.
