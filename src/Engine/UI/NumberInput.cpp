@@ -75,15 +75,23 @@ void NumberInput::updateScrubbing(UIContext& context)
     Widget::update(context);
     if (m_interaction.held && !m_wasHeld) {
         m_dragStartValue = m_value;
-        m_dragStartMouseX = context.mousePosition().x;
+        m_dragAnchorMouse = context.mousePosition();
+        m_dragAccumulatedDistance = 0.0f;
         m_dragged = false;
     }
 
+    if (m_interaction.hovered) {
+        context.requestCursor(UICursor::ResizeHorizontal);
+    }
+
     if (m_interaction.held) {
-        const float distance = context.mousePosition().x - m_dragStartMouseX;
-        m_dragged = m_dragged || std::abs(distance) >= 3.0f;
+        const float distance = context.mousePosition().x - m_dragAnchorMouse.x;
+        m_dragAccumulatedDistance += distance;
+        m_dragged = m_dragged || std::abs(m_dragAccumulatedDistance) >= 3.0f;
+        context.requestCursor(UICursor::Hidden);
+        context.requestMousePosition(m_dragAnchorMouse);
         if (m_dragged) {
-            setValue(m_dragStartValue + distance * m_sensitivity);
+            setValue(m_dragStartValue + m_dragAccumulatedDistance * m_sensitivity);
         }
     }
 

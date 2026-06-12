@@ -9,6 +9,8 @@
 #include <utility>
 #include <string>
 
+#include <glm/common.hpp>
+
 namespace Engine {
 
 namespace {
@@ -183,6 +185,21 @@ void Dropdown::setSelectedIndex(const std::size_t selectedIndex)
     notifySelectionChanged();
 }
 
+void Dropdown::setPopupSize(const glm::vec2& size)
+{
+    m_popupSizeOverride = glm::max(size, glm::vec2{1.0f, 1.0f});
+}
+
+void Dropdown::clearPopupSize()
+{
+    m_popupSizeOverride.reset();
+}
+
+void Dropdown::close()
+{
+    m_popupOpen = false;
+}
+
 void Dropdown::setOnSelectionChanged(std::function<void(std::size_t, std::string_view)> callback)
 {
     m_onSelectionChanged = std::move(callback);
@@ -207,6 +224,11 @@ bool Dropdown::popupOpen() const
     return m_popupOpen;
 }
 
+UIRect Dropdown::popupBounds() const
+{
+    return {popupPosition(), popupSize()};
+}
+
 glm::vec2 Dropdown::popupPosition() const
 {
     return {m_position.x, m_position.y + m_size.y + 6.0f};
@@ -214,6 +236,10 @@ glm::vec2 Dropdown::popupPosition() const
 
 glm::vec2 Dropdown::popupSize() const
 {
+    if (m_popupSizeOverride) {
+        return *m_popupSizeOverride;
+    }
+
     return {
         std::max(m_size.x, 120.0f),
         m_rowHeight * static_cast<float>(std::max(m_items.size(), std::size_t{1})),

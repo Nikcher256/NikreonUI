@@ -1,9 +1,11 @@
 #pragma once
 
+#include "Engine/UI/Layout.hpp"
 #include "Engine/UI/Widget.hpp"
 
 #include <cstddef>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -25,11 +27,15 @@ public:
 
     void setItems(std::vector<std::string> items);
     void setSelectedIndex(std::size_t selectedIndex);
+    void setPopupSize(const glm::vec2& size);
+    void clearPopupSize();
+    void close();
     void setOnSelectionChanged(std::function<void(std::size_t, std::string_view)> callback);
 
     [[nodiscard]] std::size_t selectedIndex() const;
     [[nodiscard]] std::string_view selectedText() const;
     [[nodiscard]] bool popupOpen() const;
+    [[nodiscard]] UIRect popupBounds() const;
 
 private:
     [[nodiscard]] glm::vec2 popupPosition() const;
@@ -41,6 +47,7 @@ private:
     int m_hoveredIndex{-1};
     bool m_popupOpen{false};
     float m_rowHeight{26.0f};
+    std::optional<glm::vec2> m_popupSizeOverride;
     std::function<void(std::size_t, std::string_view)> m_onSelectionChanged;
 };
 

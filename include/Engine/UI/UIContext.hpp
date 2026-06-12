@@ -25,6 +25,13 @@ enum class UIKey {
     Escape,
 };
 
+enum class UICursor {
+    Arrow,
+    Text,
+    ResizeHorizontal,
+    Hidden,
+};
+
 struct UIInputState {
     glm::vec2 mousePosition{0.0f, 0.0f};
     glm::vec2 scrollDelta{0.0f, 0.0f};
@@ -82,7 +89,12 @@ public:
     [[nodiscard]] bool isActive(std::string_view id) const;
     [[nodiscard]] bool hasHotItem() const;
     [[nodiscard]] bool hasActiveItem() const;
+    [[nodiscard]] bool hasFocusedItem() const;
     [[nodiscard]] bool baseInputBlocked() const;
+    void requestCursor(UICursor cursor);
+    void requestMousePosition(const glm::vec2& position);
+    [[nodiscard]] UICursor requestedCursor() const;
+    [[nodiscard]] const glm::vec2* requestedMousePosition() const;
 
 private:
     [[nodiscard]] bool contains(const glm::vec2& position, const glm::vec2& size) const;
@@ -108,6 +120,9 @@ private:
     bool m_mousePressed{false};
     bool m_mouseReleased{false};
     bool m_shiftDown{false};
+    UICursor m_requestedCursor{UICursor::Arrow};
+    glm::vec2 m_requestedMousePosition{0.0f};
+    bool m_hasRequestedMousePosition{false};
 };
 
 } // namespace Engine

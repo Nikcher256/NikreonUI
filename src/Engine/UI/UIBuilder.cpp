@@ -139,6 +139,12 @@ UIBuilder::ElementBuilder& UIBuilder::ElementBuilder::preferredSize(const glm::v
     return *this;
 }
 
+UIBuilder::ElementBuilder& UIBuilder::ElementBuilder::popupSize(const glm::vec2& size)
+{
+    element().popupSize = glm::max(size, glm::vec2{0.0f, 0.0f});
+    return *this;
+}
+
 UIBuilder::ElementBuilder& UIBuilder::ElementBuilder::grow(const float grow)
 {
     element().grow = std::max(0.0f, grow);
@@ -413,6 +419,14 @@ void UIBuilder::end()
     m_style = nullptr;
 }
 
+void UIBuilder::closeDropdown(const std::string_view id)
+{
+    const auto found = m_dropdowns.find(std::string(id));
+    if (found != m_dropdowns.end() && found->second) {
+        found->second->close();
+    }
+}
+
 UIRect UIBuilder::bounds(const std::string_view id) const
 {
     if (const Element* target = findElement(id)) {
@@ -462,6 +476,11 @@ std::vector<std::string> UIBuilder::childrenOf(const std::string_view parentId) 
         }
     }
     return children;
+}
+
+bool UIBuilder::hasPopupChildren(const Element& target) const
+{
+    return target.type == ElementType::Dropdown && !childrenOf(target.id).empty();
 }
 
 bool UIBuilder::isVisible(const Element& target) const
@@ -634,6 +653,33 @@ void UIBuilder::layoutChildren(Element& parent)
 {
     const std::vector<std::string> children = childrenOf(parent.id);
     if (children.empty()) {
+        return;
+    }
+
+    if (parent.type == ElementType::Dropdown) {
+        auto* dropdown = static_cast<Dropdown*>(widgetFor(parent));
+        if (dropdown == nullptr || !dropdown->popupOpen()) {
+            return;
+        }
+        if (parent.popupSize.x > 0.0f && parent.popupSize.y > 0.0f) {
+            dropdown->setPopupSize(parent.popupSize);
+        }
+
+        const UIRect popupBounds = dropdown->popupBounds();
+        const UIRect contentBounds = inset(popupBounds, paddingFor(parent));
+        switch (parent.layout) {
+        case UIContainerLayout::HorizontalLayout:
+            layoutHorizontal(parent, contentBounds, children);
+            break;
+        case UIContainerLayout::GridLayout:
+            layoutGrid(parent, contentBounds, children);
+            break;
+        case UIContainerLayout::OverlayLayout:
+        case UIContainerLayout::DockLayout:
+        case UIContainerLayout::VerticalLayout:
+            layoutVertical(parent, contentBounds, children);
+            break;
+        }
         return;
     }
 
@@ -872,6 +918,11 @@ void UIBuilder::applyWidgetState(Element& target)
         dropdown.setOnSelectionChanged(target.onSelectionChanged);
         dropdown.setItems(target.items);
         dropdown.setSelectedIndex(target.selectedIndex);
+        if (target.popupSize.x > 0.0f && target.popupSize.y > 0.0f) {
+            dropdown.setPopupSize(target.popupSize);
+        } else {
+            dropdown.clearPopupSize();
+        }
         break;
     }
     case ElementType::ColorPicker: {
@@ -918,6 +969,10 @@ void UIBuilder::updateElement(Element& target)
     default:
         widget->update(*m_context);
         break;
+    }
+
+    if (target.type == ElementType::Dropdown) {
+        return;
     }
 
     updateChildren(target);
@@ -968,6 +1023,13 @@ void UIBuilder::updatePopups()
         if (target.type == ElementType::Dropdown) {
             if (auto* dropdown = static_cast<Dropdown*>(widgetFor(target))) {
                 dropdown->updatePopup(*m_context);
+                if (dropdown->popupOpen() && hasPopupChildren(target)) {
+                    dropdown->registerPopupLayer(*m_context);
+                    layoutChildren(target);
+                    m_context->pushLayer(target.id + ".popup-layer");
+                    updateChildren(target);
+                    m_context->popLayer();
+                }
             }
         } else if (target.type == ElementType::ColorPicker) {
             if (auto* picker = static_cast<ColorPicker*>(widgetFor(target))) {
@@ -1014,6 +1076,9 @@ void UIBuilder::renderElement(UIFrame& frame, Element& target)
 
     renderWidget(frame, target);
     renderElementText(frame, target);
+    if (target.type == ElementType::Dropdown) {
+        return;
+    }
     renderChildren(frame, target);
 }
 
@@ -1078,7 +1143,9 @@ void UIBuilder::renderElementText(UIFrame& frame, Element& target)
     } else if (target.type == ElementType::Button) {
         text = target.text;
     } else if (target.type == ElementType::Dropdown) {
-        if (auto* dropdown = static_cast<Dropdown*>(widgetFor(target))) {
+        if (!target.text.empty()) {
+            text = target.text;
+        } else if (auto* dropdown = static_cast<Dropdown*>(widgetFor(target))) {
             text = std::string(dropdown->selectedText());
         }
     }
@@ -1099,6 +1166,7 @@ void UIBuilder::renderElementText(UIFrame& frame, Element& target)
 
 void UIBuilder::renderPopups()
 {
+    UIFrame frame{*m_context, *m_renderer, *m_text, *m_style, m_surface};
     for (const std::string& id : m_order) {
         Element& target = element(id);
         if (!isVisible(target)) {
@@ -1107,6 +1175,9 @@ void UIBuilder::renderPopups()
         if (target.type == ElementType::Dropdown) {
             if (auto* dropdown = static_cast<Dropdown*>(widgetFor(target))) {
                 dropdown->renderPopup(*m_context, *m_renderer, *m_text, *m_style);
+                if (dropdown->popupOpen() && hasPopupChildren(target)) {
+                    renderChildren(frame, target);
+                }
             }
         } else if (target.type == ElementType::ColorPicker) {
             if (auto* picker = static_cast<ColorPicker*>(widgetFor(target))) {

@@ -67,6 +67,7 @@ public:
         ElementBuilder& width(float width);
         ElementBuilder& height(float height);
         ElementBuilder& preferredSize(const glm::vec2& size);
+        ElementBuilder& popupSize(const glm::vec2& size);
         ElementBuilder& grow(float grow);
         ElementBuilder& padding(const UIEdgeInsets& padding);
         ElementBuilder& gap(float gap);
@@ -123,6 +124,7 @@ public:
     void renderBaseLayer();
     void renderTopLayer();
     void end();
+    void closeDropdown(std::string_view id);
 
     [[nodiscard]] UIRect bounds(std::string_view id) const;
     [[nodiscard]] bool visible(std::string_view id) const;
@@ -161,6 +163,7 @@ private:
         float width{0.0f};
         float height{0.0f};
         glm::vec2 preferredSize{0.0f, 0.0f};
+        glm::vec2 popupSize{0.0f, 0.0f};
         float grow{0.0f};
         std::optional<UIEdgeInsets> padding;
         std::optional<float> gap;
@@ -195,6 +198,7 @@ private:
     [[nodiscard]] Element& element(std::string_view id);
     [[nodiscard]] const Element* findElement(std::string_view id) const;
     [[nodiscard]] std::vector<std::string> childrenOf(std::string_view parentId) const;
+    [[nodiscard]] bool hasPopupChildren(const Element& element) const;
     [[nodiscard]] bool isVisible(const Element& element) const;
     [[nodiscard]] std::string typeName(const Element& element) const;
     [[nodiscard]] UIComputedStyle computedStyle(const Element& element) const;

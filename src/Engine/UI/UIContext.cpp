@@ -35,6 +35,8 @@ void UIContext::beginFrame(const UIInputState& input)
     m_shiftDown = input.shiftDown;
     m_mousePressed = m_mouseDown && !m_previousMouseDown;
     m_mouseReleased = !m_mouseDown && m_previousMouseDown;
+    m_requestedCursor = UICursor::Arrow;
+    m_hasRequestedMousePosition = false;
 }
 
 // Clears active capture after release so the next frame can pick a new widget.
@@ -238,9 +240,37 @@ bool UIContext::hasActiveItem() const
     return !m_activeId.empty();
 }
 
+bool UIContext::hasFocusedItem() const
+{
+    return !m_focusedId.empty();
+}
+
 bool UIContext::baseInputBlocked() const
 {
     return topInputLayer() != nullptr || hasHotItem() || hasActiveItem();
+}
+
+void UIContext::requestCursor(const UICursor cursor)
+{
+    if (static_cast<int>(cursor) > static_cast<int>(m_requestedCursor)) {
+        m_requestedCursor = cursor;
+    }
+}
+
+void UIContext::requestMousePosition(const glm::vec2& position)
+{
+    m_requestedMousePosition = position;
+    m_hasRequestedMousePosition = true;
+}
+
+UICursor UIContext::requestedCursor() const
+{
+    return m_requestedCursor;
+}
+
+const glm::vec2* UIContext::requestedMousePosition() const
+{
+    return m_hasRequestedMousePosition ? &m_requestedMousePosition : nullptr;
 }
 
 bool UIContext::rawContains(const glm::vec2& position, const glm::vec2& size) const

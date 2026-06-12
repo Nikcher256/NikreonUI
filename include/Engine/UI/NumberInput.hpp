@@ -46,7 +46,8 @@ private:
     float m_maxValue{1.0f};
     float m_sensitivity{0.01f};
     float m_dragStartValue{0.0f};
-    float m_dragStartMouseX{0.0f};
+    glm::vec2 m_dragAnchorMouse{0.0f, 0.0f};
+    float m_dragAccumulatedDistance{0.0f};
     int m_precision{2};
     bool m_wasHeld{false};
     bool m_dragged{false};

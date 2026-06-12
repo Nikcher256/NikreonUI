@@ -108,6 +108,10 @@ void TextInput::updateEditing(
     const float scale)
 {
     Widget::update(context);
+    if (m_interaction.hovered || context.isFocused(m_id)) {
+        context.requestCursor(UICursor::Text);
+    }
+
     if (context.primaryMousePressed() && m_interaction.hovered) {
         context.focus(m_id);
         constexpr float scrollbarInteractionHeight = 7.0f;
