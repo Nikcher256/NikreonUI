@@ -115,7 +115,8 @@ void TextInput::updateEditing(
     if (context.primaryMousePressed() && m_interaction.hovered) {
         context.focus(m_id);
         constexpr float scrollbarInteractionHeight = 7.0f;
-        const bool pressedScrollbar = m_horizontalScrollRange > 0.0f &&
+        const bool pressedScrollbar = m_showHorizontalScrollbar &&
+            m_horizontalScrollRange > 0.0f &&
             context.mousePosition().y >= m_position.y + m_size.y - scrollbarInteractionHeight;
         if (textRenderer && inputStyle && !pressedScrollbar) {
             moveCaret(caretIndexAt(context.mousePosition().x, *textRenderer, *inputStyle, fontName, scale), context.shiftDown());
@@ -131,7 +132,14 @@ void TextInput::updateEditing(
     if (!m_focused) {
         if (textRenderer && inputStyle) {
             ensureCaretVisible(*textRenderer, *inputStyle, fontName, scale);
-            updateHorizontalScrollbar(context, *inputStyle);
+            if (m_showHorizontalScrollbar) {
+                updateHorizontalScrollbar(context, *inputStyle);
+            } else {
+                m_scrollThumbWasHeld = false;
+            }
+            if (m_interaction.hovered && m_horizontalScrollRange > 0.0f && !m_value.empty()) {
+                context.requestTooltip(m_value);
+            }
         }
         return;
     }
@@ -218,7 +226,14 @@ void TextInput::updateEditing(
 
     if (textRenderer && inputStyle) {
         ensureCaretVisible(*textRenderer, *inputStyle, fontName, scale);
-        updateHorizontalScrollbar(context, *inputStyle);
+        if (m_showHorizontalScrollbar) {
+            updateHorizontalScrollbar(context, *inputStyle);
+        } else {
+            m_scrollThumbWasHeld = false;
+        }
+        if (m_interaction.hovered && m_horizontalScrollRange > 0.0f && !m_value.empty()) {
+            context.requestTooltip(m_value);
+        }
     }
 }
 
@@ -236,29 +251,7 @@ void TextInput::render(Renderer2D& renderer2D, const UIStyle& style) const
             : inputStyle.box.fill;
     const glm::vec4 border = m_focused ? inputStyle.focusedBorder : inputStyle.box.border;
     renderer2D.drawSdfRect(m_position, m_size, inputStyle.box.borderRadius, fill, border, inputStyle.box.borderWidth);
-    if (m_horizontalScrollRange > 0.0f) {
-        constexpr float trackHeight = 3.0f;
-        const float trackWidth = std::max(m_size.x - inputStyle.box.padding.x * 2.0f, 1.0f);
-        const float thumbWidth = std::max(trackWidth * trackWidth / (trackWidth + m_horizontalScrollRange), 18.0f);
-        const float thumbTravel = std::max(trackWidth - thumbWidth, 0.0f);
-        const float thumbX = m_position.x + inputStyle.box.padding.x +
-            thumbTravel * (m_horizontalScrollOffset / m_horizontalScrollRange);
-        const float trackY = m_position.y + m_size.y - trackHeight - 2.0f;
-        renderer2D.drawSdfRect(
-            {m_position.x + inputStyle.box.padding.x, trackY},
-            {trackWidth, trackHeight},
-            1.5f,
-            inputStyle.scrollbarTrack,
-            inputStyle.scrollbarTrack,
-            0.0f);
-        renderer2D.drawSdfRect(
-            {thumbX, trackY},
-            {thumbWidth, trackHeight},
-            1.5f,
-            inputStyle.scrollbarThumb,
-            inputStyle.scrollbarThumb,
-            0.0f);
-    }
+    renderHorizontalScrollbar(renderer2D, inputStyle);
 }
 
 void TextInput::render(const UIFrame& frame) const
@@ -267,6 +260,7 @@ void TextInput::render(const UIFrame& frame) const
     const UITextInputStyle& inputStyle = m_styleOverride ? *m_styleOverride : frame.style().resolveTextInput(m_styleClass, m_id);
     const glm::vec4 fill = m_focused ? inputStyle.focused : m_interaction.hovered ? inputStyle.hovered : inputStyle.box.fill;
     frame.shapes().drawSdfRect(frame.toScreen(m_position), m_size, inputStyle.box.borderRadius, fill, m_focused ? inputStyle.focusedBorder : inputStyle.box.border, inputStyle.box.borderWidth);
+    renderHorizontalScrollbar(frame.shapes(), inputStyle, frame.surface().origin);
     const UITextStyle& textStyle = frame.style().resolveText(m_value.empty() ? "input-placeholder" : "input-value");
     renderText(frame.text(), frame.style(), textStyle.font, textStyle.scale, frame.surface().origin);
 }
@@ -381,6 +375,14 @@ void TextInput::clearStyleOverride()
     m_styleOverride.reset();
 }
 
+void TextInput::setShowHorizontalScrollbar(const bool showHorizontalScrollbar)
+{
+    m_showHorizontalScrollbar = showHorizontalScrollbar;
+    if (!m_showHorizontalScrollbar) {
+        m_scrollThumbWasHeld = false;
+    }
+}
+
 void TextInput::setOnValueChanged(std::function<void(std::string_view)> callback)
 {
     m_onValueChanged = std::move(callback);
@@ -431,6 +433,11 @@ bool TextInput::hasSelection() const
 bool TextInput::focused() const
 {
     return m_focused;
+}
+
+bool TextInput::showHorizontalScrollbar() const
+{
+    return m_showHorizontalScrollbar;
 }
 
 float TextInput::horizontalScrollOffset() const
@@ -538,6 +545,35 @@ void TextInput::updateHorizontalScrollbar(UIContext& context, const UITextInputS
             m_horizontalScrollRange);
     }
     m_scrollThumbWasHeld = thumb.held;
+}
+
+void TextInput::renderHorizontalScrollbar(Renderer2D& renderer2D, const UITextInputStyle& inputStyle, const glm::vec2& origin) const
+{
+    if (!m_showHorizontalScrollbar || m_horizontalScrollRange <= 0.0f) {
+        return;
+    }
+
+    constexpr float trackHeight = 3.0f;
+    const float trackWidth = std::max(m_size.x - inputStyle.box.padding.x * 2.0f, 1.0f);
+    const float thumbWidth = std::max(trackWidth * trackWidth / (trackWidth + m_horizontalScrollRange), 18.0f);
+    const float thumbTravel = std::max(trackWidth - thumbWidth, 0.0f);
+    const float thumbX = origin.x + m_position.x + inputStyle.box.padding.x +
+        thumbTravel * (m_horizontalScrollOffset / m_horizontalScrollRange);
+    const float trackY = origin.y + m_position.y + m_size.y - trackHeight - 2.0f;
+    renderer2D.drawSdfRect(
+        {origin.x + m_position.x + inputStyle.box.padding.x, trackY},
+        {trackWidth, trackHeight},
+        1.5f,
+        inputStyle.scrollbarTrack,
+        inputStyle.scrollbarTrack,
+        0.0f);
+    renderer2D.drawSdfRect(
+        {thumbX, trackY},
+        {thumbWidth, trackHeight},
+        1.5f,
+        inputStyle.scrollbarThumb,
+        inputStyle.scrollbarThumb,
+        0.0f);
 }
 
 } // namespace Engine

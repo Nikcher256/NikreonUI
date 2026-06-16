@@ -2,6 +2,7 @@
 
 #include "Engine/Renderer/Renderer2D.hpp"
 #include "Engine/Renderer/TextRenderer.hpp"
+#include "Engine/UI/Button.hpp"
 #include "Engine/UI/UIFrame.hpp"
 #include "Engine/UI/UIStyle.hpp"
 
@@ -64,14 +65,31 @@ void Dropdown::render(Renderer2D& renderer2D, const UIStyle& style) const
         buttonStyle.normal.border,
         buttonStyle.normal.borderWidth);
 
-    const glm::vec4 chevron = buttonStyle.icon;
     const glm::vec2 center{
         m_position.x + m_size.x - 16.0f,
         m_position.y + m_size.y * 0.5f,
     };
-    renderer2D.drawQuad({center.x - 5.0f, center.y - 2.0f}, {4.0f, 4.0f}, chevron);
-    renderer2D.drawQuad({center.x - 1.0f, center.y + 2.0f}, {4.0f, 4.0f}, chevron);
-    renderer2D.drawQuad({center.x + 3.0f, center.y - 2.0f}, {4.0f, 4.0f}, chevron);
+    const UIIconImage* imageIcon = nullptr;
+    if (m_popupOpen && m_expandedArrowIcon && m_expandedArrowIcon->texture != 0U) {
+        imageIcon = &*m_expandedArrowIcon;
+    } else if (!m_popupOpen && m_collapsedArrowIcon && m_collapsedArrowIcon->texture != 0U) {
+        imageIcon = &*m_collapsedArrowIcon;
+    }
+
+    if (imageIcon != nullptr) {
+        const float iconSize = buttonStyle.dropdownIconSize > 0.0f
+            ? std::min(buttonStyle.dropdownIconSize, std::min(m_size.x, m_size.y))
+            : 14.0f;
+        renderer2D.drawImage(
+            imageIcon->texture,
+            center - glm::vec2{iconSize, iconSize} * 0.5f,
+            {iconSize, iconSize},
+            imageIcon->uvMinimum,
+            imageIcon->uvMaximum,
+            imageIcon->tint);
+    } else {
+        drawUIIcon(renderer2D, m_popupOpen ? UIIcon::ChevronUp : UIIcon::ChevronDown, center, 10.0f, buttonStyle.icon);
+    }
 }
 
 void Dropdown::updatePopup(UIContext& context)
@@ -193,6 +211,18 @@ void Dropdown::setPopupSize(const glm::vec2& size)
 void Dropdown::clearPopupSize()
 {
     m_popupSizeOverride.reset();
+}
+
+void Dropdown::setArrowIconImages(const UIIconImage& collapsed, const UIIconImage& expanded)
+{
+    m_collapsedArrowIcon = collapsed;
+    m_expandedArrowIcon = expanded;
+}
+
+void Dropdown::clearArrowIconImages()
+{
+    m_collapsedArrowIcon.reset();
+    m_expandedArrowIcon.reset();
 }
 
 void Dropdown::close()

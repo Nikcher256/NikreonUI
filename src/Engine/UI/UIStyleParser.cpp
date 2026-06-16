@@ -567,6 +567,12 @@ bool applyButtonProperty(UIButtonStyle& button, const std::string_view property,
     if (property == "selected-icon-color") {
         return parseVec4(value, button.selectedIcon);
     }
+    if (property == "icon-size") {
+        return parseFloat(value, button.iconSize);
+    }
+    if (property == "dropdown-icon-size") {
+        return parseFloat(value, button.dropdownIconSize);
+    }
     if (property == "accent") {
         return parseVec4(value, button.accent);
     }
@@ -617,6 +623,21 @@ bool applyNumberInputProperty(UINumberInputStyle& numberInput, const std::string
     }
     if (property == "accent") {
         return parseVec4(value, numberInput.accent);
+    }
+    if (property == "axis-x-color") {
+        return parseVec4(value, numberInput.axisX);
+    }
+    if (property == "axis-y-color") {
+        return parseVec4(value, numberInput.axisY);
+    }
+    if (property == "axis-z-color") {
+        return parseVec4(value, numberInput.axisZ);
+    }
+    if (property == "axis-w-color") {
+        return parseVec4(value, numberInput.axisW);
+    }
+    if (property == "axis-indicator-width") {
+        return parseFloat(value, numberInput.axisIndicatorWidth);
     }
     if (property == "show-value-fill") {
         return parseBool(value, numberInput.showValueFill);

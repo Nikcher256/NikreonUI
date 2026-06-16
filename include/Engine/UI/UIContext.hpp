@@ -93,8 +93,12 @@ public:
     [[nodiscard]] bool baseInputBlocked() const;
     void requestCursor(UICursor cursor);
     void requestMousePosition(const glm::vec2& position);
+    void requestTooltip(std::string_view text);
+    void clearTooltip();
     [[nodiscard]] UICursor requestedCursor() const;
     [[nodiscard]] const glm::vec2* requestedMousePosition() const;
+    [[nodiscard]] bool hasTooltip() const;
+    [[nodiscard]] std::string_view tooltipText() const;
 
 private:
     [[nodiscard]] bool contains(const glm::vec2& position, const glm::vec2& size) const;
@@ -123,6 +127,7 @@ private:
     UICursor m_requestedCursor{UICursor::Arrow};
     glm::vec2 m_requestedMousePosition{0.0f};
     bool m_hasRequestedMousePosition{false};
+    std::string m_tooltipText;
 };
 
 } // namespace Engine

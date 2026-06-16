@@ -14,6 +14,14 @@ namespace Engine {
 class TextRenderer;
 class UIFrame;
 
+enum class UINumberAxis {
+    None,
+    X,
+    Y,
+    Z,
+    W,
+};
+
 class NumberInput final : public Widget {
 public:
     NumberInput(std::string id, float value = 0.0f, float minValue = 0.0f, float maxValue = 1.0f);
@@ -28,6 +36,7 @@ public:
     void setRange(float minValue, float maxValue);
     void setSensitivity(float sensitivity);
     void setPrecision(int precision);
+    void setAxis(UINumberAxis axis);
     void setStyle(const UINumberInputStyle& style);
     void clearStyleOverride();
     void setOnValueChanged(std::function<void(float)> callback);
@@ -36,10 +45,14 @@ public:
     [[nodiscard]] float normalizedValue() const;
     [[nodiscard]] std::string formattedValue() const;
     [[nodiscard]] bool editing() const;
+    [[nodiscard]] UINumberAxis axis() const;
 
 private:
     void updateScrubbing(UIContext& context);
     void beginEditing(UIContext& context);
+    [[nodiscard]] glm::vec4 axisColor(const UINumberInputStyle& style) const;
+    void renderAxisIndicator(Renderer2D& renderer2D, const UINumberInputStyle& style) const;
+    void renderAxisIndicator(const UIFrame& frame, const UINumberInputStyle& style) const;
 
     float m_value{0.0f};
     float m_minValue{0.0f};
@@ -49,6 +62,7 @@ private:
     glm::vec2 m_dragAnchorMouse{0.0f, 0.0f};
     float m_dragAccumulatedDistance{0.0f};
     int m_precision{2};
+    UINumberAxis m_axis{UINumberAxis::None};
     bool m_wasHeld{false};
     bool m_dragged{false};
     bool m_editing{false};

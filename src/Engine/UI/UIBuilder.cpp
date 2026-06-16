@@ -193,6 +193,26 @@ UIBuilder::ElementBuilder& UIBuilder::ElementBuilder::textStyle(const std::strin
     return *this;
 }
 
+UIBuilder::ElementBuilder& UIBuilder::ElementBuilder::icon(const UIIcon icon)
+{
+    element().icon = icon;
+    return *this;
+}
+
+UIBuilder::ElementBuilder& UIBuilder::ElementBuilder::iconImage(const UIIconImage& icon)
+{
+    element().iconImage = icon;
+    return *this;
+}
+
+UIBuilder::ElementBuilder& UIBuilder::ElementBuilder::dropdownIconImages(const UIIconImage& collapsed, const UIIconImage& expanded)
+{
+    Element& target = element();
+    target.dropdownCollapsedIcon = collapsed;
+    target.dropdownExpandedIcon = expanded;
+    return *this;
+}
+
 UIBuilder::ElementBuilder& UIBuilder::ElementBuilder::tooltip(const std::string_view tooltip)
 {
     element().tooltip = std::string(tooltip);
@@ -240,6 +260,12 @@ UIBuilder::ElementBuilder& UIBuilder::ElementBuilder::precision(const int precis
 UIBuilder::ElementBuilder& UIBuilder::ElementBuilder::sensitivity(const float sensitivity)
 {
     element().sensitivity = std::max(0.0f, sensitivity);
+    return *this;
+}
+
+UIBuilder::ElementBuilder& UIBuilder::ElementBuilder::axis(const UINumberAxis axis)
+{
+    element().numberAxis = axis;
     return *this;
 }
 
@@ -331,7 +357,6 @@ void UIBuilder::begin(UIContext& context, Renderer2D& renderer, TextRenderer& te
     m_elements.clear();
     m_order.clear();
     m_renderQueue.clear();
-    m_tooltipText.clear();
 }
 
 UIBuilder::ElementBuilder UIBuilder::panel(const std::string_view id) { return makeElement(id, ElementType::Panel); }
@@ -403,9 +428,9 @@ void UIBuilder::renderTopLayer()
         renderPopups();
     });
     m_renderQueue.add(UIRenderLayer::Tooltip, [this, &frame]() {
-        if (!m_tooltipText.empty()) {
+        if (m_context->hasTooltip()) {
             const UICompositeRenderScope compositeScope{frame};
-            renderTooltip(m_tooltipText);
+            renderTooltip(m_context->tooltipText());
         }
     });
     m_renderQueue.flush();
@@ -868,6 +893,12 @@ void UIBuilder::applyWidgetState(Element& target)
     case ElementType::Button: {
         auto& button = *static_cast<Button*>(widget);
         button.setSelected(target.selected);
+        button.setIcon(target.icon);
+        if (target.iconImage) {
+            button.setIconImage(*target.iconImage);
+        } else {
+            button.clearIconImage();
+        }
         button.setOnClick(target.onClick);
         break;
     }
@@ -891,6 +922,7 @@ void UIBuilder::applyWidgetState(Element& target)
         number.setRange(target.minValue, target.maxValue);
         number.setSensitivity(target.sensitivity);
         number.setPrecision(target.precision);
+        number.setAxis(target.numberAxis);
         number.setValue(target.floatValue);
         break;
     }
@@ -922,6 +954,11 @@ void UIBuilder::applyWidgetState(Element& target)
             dropdown.setPopupSize(target.popupSize);
         } else {
             dropdown.clearPopupSize();
+        }
+        if (target.dropdownCollapsedIcon && target.dropdownExpandedIcon) {
+            dropdown.setArrowIconImages(*target.dropdownCollapsedIcon, *target.dropdownExpandedIcon);
+        } else {
+            dropdown.clearArrowIconImages();
         }
         break;
     }
@@ -1155,12 +1192,12 @@ void UIBuilder::renderElementText(UIFrame& frame, Element& target)
         textStyle.overflow = UIOverflow::Ellipsis;
         const bool truncated = frame.drawText(text, {target.textBounds.position, target.textBounds.size}, textStyle);
         if (hovered && !target.tooltip.empty()) {
-            m_tooltipText = target.tooltip;
+            frame.input().requestTooltip(target.tooltip);
         } else if (hovered && truncated) {
-            m_tooltipText = text;
+            frame.input().requestTooltip(text);
         }
     } else if (hovered && !target.tooltip.empty()) {
-        m_tooltipText = target.tooltip;
+        frame.input().requestTooltip(target.tooltip);
     }
 }
 

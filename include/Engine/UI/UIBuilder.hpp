@@ -76,6 +76,9 @@ public:
         ElementBuilder& labelPlacement(UILabelPlacement placement);
         ElementBuilder& text(std::string_view text);
         ElementBuilder& textStyle(std::string_view styleClass);
+        ElementBuilder& icon(UIIcon icon);
+        ElementBuilder& iconImage(const UIIconImage& icon);
+        ElementBuilder& dropdownIconImages(const UIIconImage& collapsed, const UIIconImage& expanded);
         ElementBuilder& tooltip(std::string_view tooltip);
         ElementBuilder& selected(bool selected);
         ElementBuilder& checked(bool checked);
@@ -84,6 +87,7 @@ public:
         ElementBuilder& range(float minValue, float maxValue);
         ElementBuilder& precision(int precision);
         ElementBuilder& sensitivity(float sensitivity);
+        ElementBuilder& axis(UINumberAxis axis);
         ElementBuilder& placeholder(std::string_view placeholder);
         ElementBuilder& items(std::vector<std::string> items);
         ElementBuilder& selectedIndex(std::size_t selectedIndex);
@@ -153,6 +157,10 @@ private:
         UILabelPlacement labelPlacement{UILabelPlacement::Top};
         std::string text;
         std::string textStyleClass{"toolbar-toggle"};
+        UIIcon icon{UIIcon::None};
+        std::optional<UIIconImage> iconImage;
+        std::optional<UIIconImage> dropdownCollapsedIcon;
+        std::optional<UIIconImage> dropdownExpandedIcon;
         std::string tooltip;
         bool visible{true};
         bool drawBackground{true};
@@ -173,6 +181,7 @@ private:
         float maxValue{1.0f};
         float sensitivity{0.01f};
         int precision{2};
+        UINumberAxis numberAxis{UINumberAxis::None};
         bool checked{false};
         bool selected{false};
         std::string stringValue;
@@ -237,7 +246,6 @@ private:
     std::unordered_map<std::string, Element> m_elements;
     std::vector<std::string> m_order;
     UIRenderQueue m_renderQueue;
-    std::string m_tooltipText;
     std::unordered_map<std::string, std::unique_ptr<Button>> m_buttons;
     std::unordered_map<std::string, std::unique_ptr<Checkbox>> m_checkboxes;
     std::unordered_map<std::string, std::unique_ptr<Slider>> m_sliders;

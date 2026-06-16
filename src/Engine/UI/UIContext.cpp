@@ -37,6 +37,7 @@ void UIContext::beginFrame(const UIInputState& input)
     m_mouseReleased = !m_mouseDown && m_previousMouseDown;
     m_requestedCursor = UICursor::Arrow;
     m_hasRequestedMousePosition = false;
+    m_tooltipText.clear();
 }
 
 // Clears active capture after release so the next frame can pick a new widget.
@@ -263,6 +264,18 @@ void UIContext::requestMousePosition(const glm::vec2& position)
     m_hasRequestedMousePosition = true;
 }
 
+void UIContext::requestTooltip(const std::string_view text)
+{
+    if (!text.empty()) {
+        m_tooltipText = text;
+    }
+}
+
+void UIContext::clearTooltip()
+{
+    m_tooltipText.clear();
+}
+
 UICursor UIContext::requestedCursor() const
 {
     return m_requestedCursor;
@@ -271,6 +284,16 @@ UICursor UIContext::requestedCursor() const
 const glm::vec2* UIContext::requestedMousePosition() const
 {
     return m_hasRequestedMousePosition ? &m_requestedMousePosition : nullptr;
+}
+
+bool UIContext::hasTooltip() const
+{
+    return !m_tooltipText.empty();
+}
+
+std::string_view UIContext::tooltipText() const
+{
+    return m_tooltipText;
 }
 
 bool UIContext::rawContains(const glm::vec2& position, const glm::vec2& size) const

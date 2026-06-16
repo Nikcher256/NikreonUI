@@ -34,6 +34,8 @@ struct UIButtonStyle {
     glm::vec4 selectedBorder{0.44f, 0.70f, 1.0f, 1.0f};
     glm::vec4 icon{0.56f, 0.62f, 0.72f, 1.0f};
     glm::vec4 selectedIcon{0.92f, 0.98f, 1.0f, 1.0f};
+    float iconSize{0.0f};
+    float dropdownIconSize{14.0f};
     glm::vec4 accent{0.52f, 0.78f, 1.0f, 1.0f};
 };
 
@@ -72,6 +74,11 @@ struct UINumberInputStyle {
     };
     glm::vec4 hovered{0.18f, 0.21f, 0.27f, 1.0f};
     glm::vec4 accent{0.36f, 0.58f, 0.82f, 1.0f};
+    glm::vec4 axisX{0.80f, 0.22f, 0.20f, 1.0f};
+    glm::vec4 axisY{0.28f, 0.68f, 0.30f, 1.0f};
+    glm::vec4 axisZ{0.24f, 0.48f, 0.92f, 1.0f};
+    glm::vec4 axisW{0.62f, 0.66f, 0.74f, 1.0f};
+    float axisIndicatorWidth{3.0f};
     bool showValueFill{true};
 };
 

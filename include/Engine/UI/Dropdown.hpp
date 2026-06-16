@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/UI/Button.hpp"
 #include "Engine/UI/Layout.hpp"
 #include "Engine/UI/Widget.hpp"
 
@@ -29,6 +30,8 @@ public:
     void setSelectedIndex(std::size_t selectedIndex);
     void setPopupSize(const glm::vec2& size);
     void clearPopupSize();
+    void setArrowIconImages(const UIIconImage& collapsed, const UIIconImage& expanded);
+    void clearArrowIconImages();
     void close();
     void setOnSelectionChanged(std::function<void(std::size_t, std::string_view)> callback);
 
@@ -48,6 +51,8 @@ private:
     bool m_popupOpen{false};
     float m_rowHeight{26.0f};
     std::optional<glm::vec2> m_popupSizeOverride;
+    std::optional<UIIconImage> m_collapsedArrowIcon;
+    std::optional<UIIconImage> m_expandedArrowIcon;
     std::function<void(std::size_t, std::string_view)> m_onSelectionChanged;
 };
 

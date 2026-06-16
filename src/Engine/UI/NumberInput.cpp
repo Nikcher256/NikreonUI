@@ -131,6 +131,7 @@ void NumberInput::render(Renderer2D& renderer2D, const UIStyle& style) const
             inputStyle.accent,
             0.0f);
     }
+    renderAxisIndicator(renderer2D, inputStyle);
 }
 
 void NumberInput::render(const UIFrame& frame) const
@@ -140,6 +141,7 @@ void NumberInput::render(const UIFrame& frame) const
     const glm::vec4 fill = m_interaction.hovered || m_interaction.held ? inputStyle.hovered : inputStyle.box.fill;
     frame.shapes().drawSdfRect(frame.toScreen(m_position), m_size, inputStyle.box.borderRadius, fill, inputStyle.box.border, inputStyle.box.borderWidth);
     if (inputStyle.showValueFill) frame.shapes().drawSdfRect(frame.toScreen(m_position), {m_size.x * normalizedValue(), m_size.y}, inputStyle.box.borderRadius, inputStyle.accent, inputStyle.accent, 0.0f);
+    renderAxisIndicator(frame, inputStyle);
     if (m_editing) {
         const UITextStyle& textStyle = frame.style().resolveText("control-value");
         m_textEditor.renderText(
@@ -203,6 +205,11 @@ void NumberInput::setPrecision(const int precision)
     }
 }
 
+void NumberInput::setAxis(const UINumberAxis axis)
+{
+    m_axis = axis;
+}
+
 void NumberInput::setStyle(const UINumberInputStyle& style)
 {
     m_styleOverride = style;
@@ -242,6 +249,63 @@ std::string NumberInput::formattedValue() const
 bool NumberInput::editing() const
 {
     return m_editing;
+}
+
+UINumberAxis NumberInput::axis() const
+{
+    return m_axis;
+}
+
+glm::vec4 NumberInput::axisColor(const UINumberInputStyle& style) const
+{
+    switch (m_axis) {
+    case UINumberAxis::X:
+        return style.axisX;
+    case UINumberAxis::Y:
+        return style.axisY;
+    case UINumberAxis::Z:
+        return style.axisZ;
+    case UINumberAxis::W:
+        return style.axisW;
+    case UINumberAxis::None:
+        return {0.0f, 0.0f, 0.0f, 0.0f};
+    }
+
+    return {0.0f, 0.0f, 0.0f, 0.0f};
+}
+
+void NumberInput::renderAxisIndicator(Renderer2D& renderer2D, const UINumberInputStyle& style) const
+{
+    if (m_axis == UINumberAxis::None || style.axisIndicatorWidth <= 0.0f) {
+        return;
+    }
+
+    const float width = std::min(style.axisIndicatorWidth, std::max(m_size.x, 0.0f));
+    const glm::vec4 color = axisColor(style);
+    renderer2D.drawSdfRect(
+        m_position,
+        {width, m_size.y},
+        style.box.borderRadius,
+        color,
+        color,
+        0.0f);
+}
+
+void NumberInput::renderAxisIndicator(const UIFrame& frame, const UINumberInputStyle& style) const
+{
+    if (m_axis == UINumberAxis::None || style.axisIndicatorWidth <= 0.0f) {
+        return;
+    }
+
+    const float width = std::min(style.axisIndicatorWidth, std::max(m_size.x, 0.0f));
+    const glm::vec4 color = axisColor(style);
+    frame.shapes().drawSdfRect(
+        frame.toScreen(m_position),
+        {width, m_size.y},
+        style.box.borderRadius,
+        color,
+        color,
+        0.0f);
 }
 
 } // namespace Engine

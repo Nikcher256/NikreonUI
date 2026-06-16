@@ -79,19 +79,46 @@ std::vector<std::string> wrapWords(
     const float width)
 {
     std::vector<std::string> lines;
+
+    const auto appendWrappedToken = [&](const std::string& token, std::string& current) {
+        std::string remaining = token;
+        while (!remaining.empty()) {
+            const std::string candidate = current.empty() ? remaining : current + " " + remaining;
+            if (renderer.measureText(candidate, font, scale).x <= width) {
+                current = candidate;
+                return;
+            }
+
+            if (!current.empty()) {
+                lines.push_back(current);
+                current.clear();
+                continue;
+            }
+
+            std::string line;
+            while (!remaining.empty()) {
+                const std::string next = line + remaining.front();
+                if (!line.empty() && renderer.measureText(next, font, scale).x > width) {
+                    break;
+                }
+                line = next;
+                remaining.erase(remaining.begin());
+            }
+
+            if (line.empty()) {
+                line.push_back(remaining.front());
+                remaining.erase(remaining.begin());
+            }
+            lines.push_back(line);
+        }
+    };
+
     std::istringstream stream{std::string{value}};
     std::string word;
     std::string current;
 
     while (stream >> word) {
-        const std::string candidate = current.empty() ? word : current + " " + word;
-        if (current.empty() || renderer.measureText(candidate, font, scale).x <= width) {
-            current = candidate;
-            continue;
-        }
-
-        lines.push_back(current);
-        current = word;
+        appendWrappedToken(word, current);
     }
 
     if (!current.empty() || lines.empty()) {
@@ -137,6 +164,13 @@ bool UIFrame::drawText(const std::string_view value, const UIClipRect& bounds, c
     const float totalHeight = measuredLineHeight * static_cast<float>(lines.size());
     glm::vec2 position = toScreen(bounds.position);
 
+    if (textStyle.overflow == UIOverflow::Clip) {
+        truncated = truncated || totalHeight > bounds.size.y;
+        for (const std::string& line : lines) {
+            truncated = truncated || m_text->measureText(line, textStyle.font, textStyle.scale).x > availableWidth;
+        }
+    }
+
     if (textStyle.verticalAlignment == UITextVerticalAlignment::Center) {
         position.y += (bounds.size.y - totalHeight) * 0.5f;
     } else if (textStyle.verticalAlignment == UITextVerticalAlignment::Bottom) {
@@ -170,6 +204,23 @@ bool UIFrame::drawText(const std::string_view value, const UIClipRect& bounds, c
         m_text->popClipRect();
     }
 
+    return truncated;
+}
+
+bool UIFrame::drawTextWithTooltip(
+    const std::string_view value,
+    const UIClipRect& bounds,
+    const UITextStyle& textStyle,
+    const std::string_view tooltipText) const
+{
+    const bool truncated = drawText(value, bounds, textStyle);
+    const std::string_view requestedTooltip = tooltipText.empty() ? value : tooltipText;
+    if (truncated && !requestedTooltip.empty()) {
+        const UIClipRect screenBounds = toScreen(bounds);
+        if (m_input->isMouseInside(screenBounds.position, screenBounds.size)) {
+            m_input->requestTooltip(requestedTooltip);
+        }
+    }
     return truncated;
 }
 

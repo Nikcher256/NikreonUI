@@ -33,6 +33,7 @@ public:
     void setPlaceholder(std::string placeholder);
     void setStyle(const UITextInputStyle& style);
     void clearStyleOverride();
+    void setShowHorizontalScrollbar(bool showHorizontalScrollbar);
     void setOnValueChanged(std::function<void(std::string_view)> callback);
     void selectAll();
     void moveCaretToEnd();
@@ -44,6 +45,7 @@ public:
     [[nodiscard]] std::size_t selectionEnd() const;
     [[nodiscard]] bool hasSelection() const;
     [[nodiscard]] bool focused() const;
+    [[nodiscard]] bool showHorizontalScrollbar() const;
     [[nodiscard]] float horizontalScrollOffset() const;
     [[nodiscard]] float horizontalScrollRange() const;
 
@@ -55,6 +57,7 @@ private:
     [[nodiscard]] std::size_t caretIndexAt(float mouseX, const TextRenderer& textRenderer, const UITextInputStyle& inputStyle, std::string_view fontName, float scale) const;
     void ensureCaretVisible(const TextRenderer& textRenderer, const UITextInputStyle& inputStyle, std::string_view fontName, float scale);
     void updateHorizontalScrollbar(UIContext& context, const UITextInputStyle& inputStyle);
+    void renderHorizontalScrollbar(Renderer2D& renderer2D, const UITextInputStyle& inputStyle, const glm::vec2& origin = {}) const;
 
     std::string m_value;
     std::string m_placeholder;
@@ -66,6 +69,7 @@ private:
     float m_scrollDragStartOffset{0.0f};
     float m_scrollDragStartMouseX{0.0f};
     bool m_scrollThumbWasHeld{false};
+    bool m_showHorizontalScrollbar{false};
     std::optional<UITextInputStyle> m_styleOverride;
     std::function<void(std::string_view)> m_onValueChanged;
 };

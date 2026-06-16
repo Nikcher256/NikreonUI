@@ -32,6 +32,11 @@ public:
 
     void drawBox(const UIClipRect& bounds, const UIBoxStyle& box) const;
     bool drawText(std::string_view value, const UIClipRect& bounds, const UITextStyle& textStyle) const;
+    bool drawTextWithTooltip(
+        std::string_view value,
+        const UIClipRect& bounds,
+        const UITextStyle& textStyle,
+        std::string_view tooltipText = {}) const;
     void pushClip(const UIClipRect& bounds) const;
     void popClip() const;
     void beginCompositeRenderItem() const;
