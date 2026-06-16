@@ -83,6 +83,7 @@ public:
         const glm::vec2& uvMaximum = {1.0f, 1.0f},
         const glm::vec4& tint = {1.0f, 1.0f, 1.0f, 1.0f}) override;
     void uploadImage(UITextureId texture, std::uint32_t width, std::uint32_t height, const std::uint8_t* rgba8, std::size_t byteCount) override;
+    [[nodiscard]] bool hasImage(UITextureId texture) const override;
     void drawRect(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color, float thickness = 1.0f) override;
     void drawSdfRect(
         const glm::vec2& position,

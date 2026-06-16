@@ -69,6 +69,11 @@ public:
         (void)rgba8;
         (void)byteCount;
     }
+    [[nodiscard]] virtual bool hasImage(UITextureId texture) const
+    {
+        (void)texture;
+        return false;
+    }
     virtual void pushClipRect(const UIClipRect& clipRect) = 0;
     virtual void popClipRect() = 0;
     virtual void end() = 0;

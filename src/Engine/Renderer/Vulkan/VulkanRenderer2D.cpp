@@ -264,6 +264,11 @@ void VulkanRenderer2D::uploadImage(
     m_textures.emplace(texture, createTextureResource(width, height, rgba8, byteCount));
 }
 
+bool VulkanRenderer2D::hasImage(const UITextureId texture) const
+{
+    return texture != 0U && m_textures.find(texture) != m_textures.end();
+}
+
 void VulkanRenderer2D::drawRect(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color, const float thickness)
 {
     if (size.x <= 0.0f || size.y <= 0.0f) {
